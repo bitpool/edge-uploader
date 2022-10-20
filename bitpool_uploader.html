@@ -1,0 +1,220 @@
+/*
+  MIT License Copyright 2021, 2022 - Bitpool Pty Ltd
+*/
+
+
+<script type="text/javascript">
+
+    RED.nodes.registerType('uploader', {
+        category: 'Bitpool Cloud',
+        color: '#00aeef',
+        defaults: {
+            name: {value: ""},
+            events: {value: true},
+            apiKey: {type: "Bitpool-Api-Key", required: true},
+            pool_settings: {type: "Bitpool-Pool-Settings", required: false},
+            stream_name: {value: "", required: false},
+            uploadCount: {value: 800, required: true},
+            uploadInterval: {value: ""},
+            uploadInterval_value: {value: "1", required: true},
+            uploadInterval_options: {value: "Minutes", required: true},
+            bpChkShowDateOnLabel: {value: true},
+            bpChkShowDebugWarnings: {value: true},
+            rebuildOnError: {value: true}
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "bitpool.svg",
+        label: function () {
+            return this.name || "uploader";
+        },
+        oneditprepare: function () {
+            let tabs = RED.tabs.create(
+                {
+                    id: "node-input-read-tabs",
+                    onchange: function (tab) {
+                        $("#node-input-tabs-content").children().hide()
+                        $("#" + tab.id).show()
+                    }
+                });
+
+            tabs.addTab(
+                {
+                    id: "properties-tab",
+                    label: "Properties"
+                });
+
+            tabs.addTab(
+                {
+                    id: "options-tab",
+                    label: "Options"
+                });
+        },
+        oneditsave: function () {
+            document.getElementById("node-input-uploadInterval").value = getTimePeriodInSeconds(
+                document.getElementById("node-input-uploadInterval_value").value,
+                document.getElementById("node-input-uploadInterval_options").value
+            );
+        },
+    });
+
+    function getTimePeriodInSeconds(value, interval) {
+        switch (interval) {
+            case "Seconds":
+                return value;
+                break;
+            case "Minutes":
+                return value * 60;
+                break;
+            case "Hours":
+                return value * 3600;
+                break;
+            case "Days":
+                return value * 86400;
+                break;
+            default:
+            // code block
+        }
+    }
+
+</script>
+
+<style>
+
+
+</style>
+
+<script type="text/html" data-template-name="uploader">
+
+    <div class='form-row node-input-read-tabs-row'>
+        <ul style='min-width:600px;margin-bottom:20px' id='node-input-read-tabs'></ul>
+    </div>
+
+    <div id='node-input-tabs-content'>
+
+        <div id='properties-tab' style='display:none'>
+            <div class="form-row">
+                <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+                <input type="text" id="node-input-name" placeholder="Name">
+            </div>
+
+            <div class="form-row" style="display: flex;">
+                <p> API Key: </p>
+                <label for="node-input-apiKey" style="width: 49px;" ><i class="icon-globe"></i> <span data-i18n="API Key"></span></label>
+                <input type="text" id="node-input-apiKey" style="display: contents;">
+            </div>
+
+            <div class="form-row" style="display: flex;">
+                <p> Pool Settings: </p>
+                <label for="node-input-pool_settings" style="width: 18px;"><i class="icon-globe"></i> <span data-i18n="Pool Settings"></span></label>
+                <input type="text" id="node-input-pool_settings" style="display: contents;">
+            </div>
+
+            <div class="form-row">
+                <label for="node-input-stream_name"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.stream_name"></span>Stream Name</label>
+                <input type="text" id="node-input-stream_name" placeholder="msg.stream">
+            </div>
+
+            <div class="form-row">
+                <label for="node-input-uploadCount"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.uploadCount"></span>Upload Max Count</label>
+                <input type="number" id="node-input-uploadCount" placeholder="800">
+            </div>
+
+            <div class="form-row">
+                <label for="node-input-uploadInterval" style="align-self: center;"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.uploadInterval"></span>Upload Interval </label>
+                <input type="text" id="node-input-uploadInterval" style="display: none;">
+                <input type="number" id="node-input-uploadInterval_value" placeholder="5" style="width: 70px; margin-right: 5px;">
+                <select name="timePeriod" id="node-input-uploadInterval_options" style="width: 120px; margin-right: 5px;">
+                    <option value="Seconds">Seconds</option>
+                    <option value="Minutes">Minutes</option>
+                    <option value="Hours">Hours</option>
+                    <option value="Days">Days</option>
+                </select>
+            </div>
+        </div>
+
+        <div id='options-tab'>
+            <div class="form-row"><p><u>Monitoring:</u></p></div>
+            <div class="form-row" style="display: flex;">
+            <div class="form-check" style="width: 10%; display: grid; align-items: baseline;">
+                <input class="form-check-input" type="checkbox" value="" id="node-input-bpChkShowDateOnLabel" checked>
+            </div>
+            <label id="node-label-bpChkShowDateOnLabel" for="node-input-bpChkShowDateOnLabel" style="text-align:left; vertical-align:bottom; width: 100%; padding-left: 35px;">Show input activity on node status</label>
+            </div>
+            <div class="form-row" style="display: flex;">
+            <div class="form-check" style="width: 10%; display: grid; align-items: baseline;">
+                <input class="form-check-input" type="checkbox" value="" id="node-input-bpChkShowDebugWarnings" checked>
+            </div>
+            <label id="node-label-bpChkShowDebugWarnings" for="node-input-bpChkShowDebugWarnings" style="text-align:left; vertical-align:middle; width: 100%; padding-left: 35px;">Show any warnings in debug tab</label>
+            </div>
+
+            <div class="form-row"><p><u>Rebuild:</u></p></div>
+            <div class="form-row" style="display: flex;">
+                <div class="form-check" style="width: 10%; display: grid; align-items: baseline;">
+                    <input class="form-check-input" type="checkbox" value="" id="node-input-rebuildOnError" checked>
+                </div>
+                <label id="node-label-rebuildOnError" for="node-input-rebuildOnError" style="text-align:left; vertical-align:bottom; width: 100%; padding-left: 35px;">Rebuild stored data on upload error</label>
+            </div>
+
+        </div>
+    </div>
+
+</script>
+
+<script type="text/html" data-help-name="uploader">
+    <p> A node that connects data sources with the Bitpool cloud. Bitpool Cloud works on Pools and Streams, a Pool is a collection of Streams
+    and a Stream is a specific data point. Find out more at https://wiki.bitpool.com  </p>
+
+        <h3><strong>API Key</strong></h3>
+        <ol class="node-ports">
+        <ul>
+            <li><i><strong>Api Key:</strong></i> Specify your API key provided by https://app.bitpool.com </i></li>
+        </ul></p>
+        <p> 
+        
+        </ol>
+
+        <h3><strong>Pool Settings</strong></h3>
+        <ol class="node-ports">
+        <ul>
+             <li><i><strong>Pool Name:</strong></i> Enter the pool name for the data to be stored in for Bitpool OS. This can be manually set or parsed in on msg.pool </i></li>
+             <li><i><strong>Pool Key:</strong></i> Enter the pool key for the stream to be stored in the pool for Bitpool OS. This can be manually set or parsed in on msg.poolKey</i></li>
+             <li><i><strong>Public Pool: </strong> Whether or not the pool is public</i></li>
+             <li><i><strong>Virtual Pool: </strong> Whether or not the pool is virtual</i></li>
+        </ul></p>
+        <p> 
+         
+        </ol>
+
+        <h3><strong>Bitpool Uploader</strong></h3>
+        <ol class="node-ports">
+        <ul>
+            <li><i><strong>Stream Name:</strong></i> Enter the stream name for the data point to be stored in the pool for Bitpool OS. This can be manually set or parsed in on msg.stream</i></li>
+        </ul></p>
+        <ul>
+            <li><i><strong>Upload Max Count:</strong></i> The amount of logs the uploader will cache before uploading the data to Bitpool OS. This can be used for system tuning purposes</i></li>
+        </ul>
+        <ul>
+            <li><i><strong>Upload Interval:</strong></i> The amount of time the uploader will wait before uploading the data to Bitpool OS. This can be used for system tuning purposes</i></li>
+        </ul>
+        <p>
+        </ol>
+        <h3><strong>Options</strong></h3>
+        <ol class="node-ports">
+        <ul>
+            <li><i><strong>Monitoring:</strong></i> Toggles system outputs and logging in both status and debug sections</i></li>
+        </ul></p>
+        <ul>
+            <li><i><strong>Rebuild:</strong></i> Toggles the rebuild trigger if an upload fails</i></li>
+        </ul>
+        <p>
+        </ol>
+
+        <h3>Resources:</h3>
+        <h4><strong>Online Docs:</strong></h4>
+        <ul type="1">
+          <li><a href="https://www.bitpool.com/">bitpool.com</a> - check us out here.</li>
+          <li><a href="https://app.bitpool.com/">app.bitpool.com</a> - set up your account.</li>
+          <li><a href="https://wiki.bitpool.com/">wiki.bitpool.com</a> - find more documentation.</li>
+        </ul>
+</script>

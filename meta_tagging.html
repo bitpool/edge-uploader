@@ -1,0 +1,214 @@
+
+/*
+MIT License Copyright 2021, 2022 - Bitpool Pty Ltd
+*/
+
+<script type="text/html" data-template-name="metatag">
+    <style>
+        .form-row {
+            align-items: center;
+            flex-wrap: nowrap !important;
+            display: flex;
+        }
+        button {
+            height: 34px;
+            border-radius: 5px !important;
+        }
+    </style>
+    <div class="form-row">
+        <label for="node-input-name"><i class="name-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+
+    <!-- Stream tags section -->
+    <div class="form-row">
+        <p><strong>Stream Tags:</strong></p>
+    </div>
+
+    <div class="form-row" style="display: flex;">
+        <label for="node-input-bitpoolStreamTags"><i class="icon-tag"></i> Bitpool Tags:</label>
+        <select name="bpTags" id="node-input-bitpoolStreamTags" style="width: 30%; margin-right: 5px;">
+            <option value="bp:deviceManufacturer">bp:deviceManufacturer</option>
+            <option value="bp:deviceType">bp:deviceType</option>
+            <option value="bp:deviceLocation">bp:deviceLocation</option>
+            <option value="bp:systemType">bp:systemType</option>
+            <option value="bp:protocol">bp:protocol</option>
+            
+        </select>
+        <input type="text" id="node-input-bitpoolStreamTagValue" placeholder="Value" style="width: 34%; margin-right: 5px;">
+        <button class="ui-button ui-corner-all ui-widget" id="bitpoolStreamTagsAddButton" style="margin-left: 5px; padding-top: 0px; padding-bottom: 0px;
+        min-width: fit-content;"><div>Add Tag</div></button>
+
+    </div>
+    <div class="form-row">
+        <label for="node-input-customStreamTag"><i class="icon-tag"></i> Custom Tag:</label>
+        <input type="text" id="node-input-customStreamTag" placeholder="Custom Tags" style="width: 65%;">
+        <button class="ui-button ui-corner-all ui-widget" id="customStreamTagsAddButton" style="margin-left: 10px; padding-top: 0px; padding-bottom: 0px; 
+        min-width: fit-content;"><div>Add Tag</div></button>
+    </div>
+    <div class="form-row">
+        <input type="text" id="node-input-StreamTags" placeholder="Tag List" data-role="tagsinput" style="width: 100%;">
+    </div>
+
+    <!-- Pool Tags section-->
+    <div class="form-row">
+        <p><strong>Pool Tags:</strong></p>
+    </div>
+
+    <div class="form-row" style="display: flex;">
+        <label for="node-input-bitpoolPoolTags"><i class="icon-tag"></i> Bitpool Tags:</label>
+        <select name="bpTags" id="node-input-bitpoolPoolTags" style="width: 30%; margin-right: 5px;">
+            <option value="bp:customer">bp:customer</option>
+            <option value="bp:address">bp:address</option>
+            <option value="bp:geoLocation">bp:geoLocation</option>
+            <option value="bp:email">bp:email</option>
+            <option value="bp:phoneNumber">bp:phoneNumber</option>
+            <option value="bp:state">bp:state</option>
+            <option value="bp:country">bp:country</option>
+            <option value="bp:area">bp:area</option>
+        </select>
+        <input type="text" id="node-input-bitpoolPoolTagValue" placeholder="Value" style="width: 34%; margin-right: 5px;">
+        <button class="ui-button ui-corner-all ui-widget" id="bitpoolPoolTagsAddButton" style="margin-left: 5px; padding-top: 0px; padding-bottom: 0px; 
+        min-width: fit-content;"><div>Add Tag</div></button>
+
+    </div>
+    <div class="form-row">
+        <label for="node-input-customPoolTag"><i class="icon-tag"></i> Custom Tag:</label>
+        <input type="text" id="node-input-customPoolTag" placeholder="Custom Tags" style="width: 65%;">
+        <button class="ui-button ui-corner-all ui-widget" id="customPoolTagsAddButton" style="margin-left: 10px; padding-top: 0px; padding-bottom: 0px; 
+        min-width: fit-content;"><div>Add Tag</div></button>
+    </div>
+    <div class="form-row">
+        <input type="text" id="node-input-PoolTags" placeholder="Tag List" data-role="tagsinput" style="width: 100%;">
+    </div>
+
+
+</script>
+<script type="text/html" data-help-name="metatag">
+    <p>A node that adds tags to the msg object, and works in cooperation with the uploader node to add more value to your bitpool data. Find out more at https://wiki.bitpool.com </p>
+
+    <h3><strong>Stream Tags</strong></h3>
+    <ol class="node-ports">
+        <ul>
+            <li><i><strong>Bitpool Tags:</strong></i> The tag keys found here are the standard set used in Bitpool OS to describe a stream. Enter a value in the respective field and click Add tag.</i></li>
+        </ul></p>
+        <ul>
+            <li><i><strong>Custom Tags:</strong></i> This section allows for user defined tags to be uploaded to the stream. Enter a tag that follows the syntax: Key:Value.</i></li>
+        </ul>
+    </ol>
+    <h3><strong>Pool Tags</strong></h3>
+    <ol class="node-ports">
+        <ul>
+            <li><i><strong>Bitpool Tags:</strong></i> The tag keys found here are the standard set used in Bitpool OS to describe a pool. Enter a value in the respective field and click Add tag.</i></li>
+        </ul></p>
+        <ul>
+            <li><i><strong>Custom Tags:</strong></i> This section allows for user defined tags to be uploaded to the pool. Enter a tag that follows the syntax: Key:Value.</i></li>
+        </ul>
+    </ol>
+    <h3>Resources:</h3>
+    <h4><strong>Online Docs:</strong></h4>
+    <ul type="1">
+      <li><a href="https://www.bitpool.com/">bitpool.com</a> - check us out here.</li>
+      <li><a href="https://app.bitpool.com/">app.bitpool.com</a> - set up your account.</li>
+      <li><a href="https://wiki.bitpool.com/">wiki.bitpool.com</a> - find more documentation.</li>
+    </ul>
+</script>
+
+<script type="text/javascript">
+
+RED.nodes.registerType('metatag',{
+        category: 'Bitpool Cloud',
+        color: '#00aeef',
+        defaults: {
+            name: {value:""},
+            metatag:{value:""},
+            StreamTags: { value: "" },
+            PoolTags: { value: "" },
+            property: {value:"payload", required:true,
+            label:RED._("node-red:common.label.payload"),
+            validate: RED.validators.typedInput("propertyType", false)},
+            propertyType: { value:"msg" },
+            rules: {value:[{t:"eq", v:"", vt:"str"}]},
+            checkall: {value:"true", required:true},
+            repair: {value:false},
+            outputs: {value:1}
+        },
+        inputs:1,
+        outputs:1,
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        },
+        icon: "bitpool.svg",
+        label: function() {
+            return this.name||"metatag";
+        },
+        oneditprepare: function(){
+            // Stream tag button binding
+            $("#bitpoolStreamTagsAddButton").on("click", function() {
+                let key = $("#node-input-bitpoolStreamTags").val();
+                let value = $("#node-input-bitpoolStreamTagValue").val();
+                let tag = `${key}=${value}`;
+
+                let currentTags = $("#node-input-StreamTags").val();
+
+                if(value !== "") {
+                    if(currentTags == "") {
+                        $("#node-input-StreamTags").val(tag);
+                    } else {
+                        let updatedTagString = `${currentTags}, ${tag}`;
+                        $("#node-input-StreamTags").val(updatedTagString);
+                    }                
+                }
+            });
+
+            $("#customStreamTagsAddButton").on("click", function() {
+                let customTag = $("#node-input-customStreamTag").val();
+                let currentTags = $("#node-input-StreamTags").val();
+
+                if(customTag !== ""){
+                    if(currentTags == "") {
+                        $("#node-input-StreamTags").val(customTag);
+                    } else {
+                        let updatedTagString = `${currentTags}, ${customTag}`;
+                        $("#node-input-StreamTags").val(updatedTagString);
+                    }
+                }
+            });
+
+            //pool tags button binding
+            $("#bitpoolPoolTagsAddButton").on("click", function() {
+                let key = $("#node-input-bitpoolPoolTags").val();
+                let value = $("#node-input-bitpoolPoolTagValue").val();
+                let tag = `${key}=${value}`;
+
+                let currentTags = $("#node-input-PoolTags").val();
+
+                if(value !== "") {
+                    if(currentTags == "") {
+                        $("#node-input-PoolTags").val(tag);
+                    } else {
+                        let updatedTagString = `${currentTags}, ${tag}`;
+                        $("#node-input-PoolTags").val(updatedTagString);
+                    }                
+                }
+            });
+
+            $("#customPoolTagsAddButton").on("click", function(){
+                let customTag = $("#node-input-customPoolTag").val();
+                let currentTags = $("#node-input-PoolTags").val();
+
+                if(customTag !== ""){
+                    if(currentTags == "") {
+                        $("#node-input-PoolTags").val(customTag);
+                    } else {
+                        let updatedTagString = `${currentTags}, ${customTag}`;
+                        $("#node-input-PoolTags").val(updatedTagString);
+                    }
+                }
+            });
+
+        }
+    });
+
+
+</script>
