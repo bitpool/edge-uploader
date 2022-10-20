@@ -24,7 +24,7 @@ Install using the Node-RED manage palette,
 
 2. Select the 'Manage palette' option.
 
-3. Click the 'Install' tab and type 'bitpool-edge uploader' into the search field.
+3. Click the 'Install' tab and type '@bitpoolos/edge-uploader' into the search field.
 
 4. Find the latest version and click to install.
 ```
@@ -32,7 +32,7 @@ Install using the Node-RED manage palette,
 or using NPM from the command line.
 
 ```bash
-$ npm install @bitpool-edge/node-red-contrib-bitpool-uploader
+$ npm install @bitpoolos/edge-uploader
 ```
 
 ## Resources
@@ -43,6 +43,6 @@ $ npm install @bitpool-edge/node-red-contrib-bitpool-uploader
 
 ## License
 
-This project is under the Apache-2.0 license agreement. For more details, see the [LICENSE](LICENSE.txt) file.
+This project is under the MIT license agreement. For more details, see the LICENSE file.
 
 
