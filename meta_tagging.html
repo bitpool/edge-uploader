@@ -13,75 +13,106 @@
             height: 34px;
             border-radius: 5px !important;
         }
+        .node-input-StreamTags {
+            width: 100% !important;
+        }
+        .node-input-streamTag-value {
+            width: 166px !important;
+        }
+        .node-input-streamTag-filter {
+            width: 89% !important;
+        }
+        .dropbtn {
+            background-color: #ffffff;
+            color: #104b66;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+            width: 220px;
+            border: 1px solid var(--red-ui-form-input-border-color) !important;
+            padding: 6px;
+            text-align: start;
+        }
+        .dropbtn:hover, .dropbtn:focus {
+            background-color: #ffffff;
+        }
+        #streamTagKeySearchInput {
+            box-sizing: border-box;
+            background-position: 14px 12px;
+            background-repeat: no-repeat;
+            font-size: 16px;
+            border: 1px solid var(--red-ui-form-input-border-color) !important;
+            width: 100%;
+            border-radius: none !important;
+        }
+        .streamTagKeyDropdownRow {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #ffffff;
+            min-width: 230px;
+            overflow: auto;
+            border: 1px solid #ddd;
+            z-index: 1;
+        }
+        .dropdown-content a {
+            color: black;
+            padding: 6px 8px;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+        }
+        .streamTagKeyDropdownRow a:hover {background-color: #ffffff;}
+        .showStreamTagDropDown {
+            display: flex !important;
+            flex-direction: column;
+            align-items: flex-start;
+            width: 215px;
+            z-index: 999999;
+            position: fixed;
+            overflow-y: scroll;
+            height: -webkit-fill-available;
+            margin-left: 96px;
+            margin-bottom: 40px;
+        }
+        .streamTagOption {cursor: pointer;}
+        .streamTagKeyDropdownRow > label {
+            width: 95px !important;
+        }
+        
+
     </style>
+
     <div class="form-row">
         <label for="node-input-name"><i class="name-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
 
-    <!-- Stream tags section -->
-    <div class="form-row">
-        <p><strong>Stream Tags:</strong></p>
+    <div class='form-row node-input-read-tabs-row'>
+        <ul style='min-width:600px;margin-bottom:20px' id='node-input-read-tabs'></ul>
     </div>
 
-    <div class="form-row" style="display: flex;">
-        <label for="node-input-bitpoolStreamTags"><i class="icon-tag"></i> Bitpool Tags:</label>
-        <select name="bpTags" id="node-input-bitpoolStreamTags" style="width: 30%; margin-right: 5px;">
-            <option value="bp:deviceManufacturer">bp:deviceManufacturer</option>
-            <option value="bp:deviceType">bp:deviceType</option>
-            <option value="bp:deviceLocation">bp:deviceLocation</option>
-            <option value="bp:systemType">bp:systemType</option>
-            <option value="bp:protocol">bp:protocol</option>
-            
-        </select>
-        <input type="text" id="node-input-bitpoolStreamTagValue" placeholder="Value" style="width: 34%; margin-right: 5px;">
-        <button class="ui-button ui-corner-all ui-widget" id="bitpoolStreamTagsAddButton" style="margin-left: 5px; padding-top: 0px; padding-bottom: 0px;
-        min-width: fit-content;"><div>Add Tag</div></button>
+    <div id='node-input-tabs-content'>
+
+        <div id='properties-tab' style='display:none'>
+            <!-- Stream tags section -->
+            <div class='form-row node-input-streamTags-container-row'>
+                <ol id="node-input-streamTags-container" style="width: 600px;"></ol>
+            </div>
+        </div>
+
+        <div id='taglib-tab' style='display:none'>
+            <div class="form-row" style="display: flex; align-items: flex-end;">
+                <p> Tag Library: </p>
+                <label for="node-input-taglib" style="width: 18px;"><i class="icon-globe"></i> <span data-i18n="Tag Library"></span></label>
+                <input type="text" id="node-input-taglib" style="display: contents;">
+            </div>
+        </div>
 
     </div>
-    <div class="form-row">
-        <label for="node-input-customStreamTag"><i class="icon-tag"></i> Custom Tag:</label>
-        <input type="text" id="node-input-customStreamTag" placeholder="Custom Tags" style="width: 65%;">
-        <button class="ui-button ui-corner-all ui-widget" id="customStreamTagsAddButton" style="margin-left: 10px; padding-top: 0px; padding-bottom: 0px; 
-        min-width: fit-content;"><div>Add Tag</div></button>
-    </div>
-    <div class="form-row">
-        <input type="text" id="node-input-StreamTags" placeholder="Tag List" data-role="tagsinput" style="width: 100%;">
-    </div>
-
-    <!-- Pool Tags section-->
-    <div class="form-row">
-        <p><strong>Pool Tags:</strong></p>
-    </div>
-
-    <div class="form-row" style="display: flex;">
-        <label for="node-input-bitpoolPoolTags"><i class="icon-tag"></i> Bitpool Tags:</label>
-        <select name="bpTags" id="node-input-bitpoolPoolTags" style="width: 30%; margin-right: 5px;">
-            <option value="bp:customer">bp:customer</option>
-            <option value="bp:address">bp:address</option>
-            <option value="bp:geoLocation">bp:geoLocation</option>
-            <option value="bp:email">bp:email</option>
-            <option value="bp:phoneNumber">bp:phoneNumber</option>
-            <option value="bp:state">bp:state</option>
-            <option value="bp:country">bp:country</option>
-            <option value="bp:area">bp:area</option>
-        </select>
-        <input type="text" id="node-input-bitpoolPoolTagValue" placeholder="Value" style="width: 34%; margin-right: 5px;">
-        <button class="ui-button ui-corner-all ui-widget" id="bitpoolPoolTagsAddButton" style="margin-left: 5px; padding-top: 0px; padding-bottom: 0px; 
-        min-width: fit-content;"><div>Add Tag</div></button>
-
-    </div>
-    <div class="form-row">
-        <label for="node-input-customPoolTag"><i class="icon-tag"></i> Custom Tag:</label>
-        <input type="text" id="node-input-customPoolTag" placeholder="Custom Tags" style="width: 65%;">
-        <button class="ui-button ui-corner-all ui-widget" id="customPoolTagsAddButton" style="margin-left: 10px; padding-top: 0px; padding-bottom: 0px; 
-        min-width: fit-content;"><div>Add Tag</div></button>
-    </div>
-    <div class="form-row">
-        <input type="text" id="node-input-PoolTags" placeholder="Tag List" data-role="tagsinput" style="width: 100%;">
-    </div>
-
-
 </script>
 <script type="text/html" data-help-name="metatag">
     <p>A node that adds tags to the msg object, and works in cooperation with the uploader node to add more value to your bitpool data. Find out more at https://wiki.bitpool.com </p>
@@ -122,7 +153,15 @@ RED.nodes.registerType('metatag',{
             name: {value:""},
             metatag:{value:""},
             StreamTags: { value: "" },
-            PoolTags: { value: "" },
+            tagRegisters: {value: [] },
+            streamTagList: {value:[        
+                {optValue: "bp:deviceManufacturer", type: "String"},
+                {optValue: "bp:deviceType", type: "String"},
+                {optValue: "bp:deviceLocation", type: "String"},
+                {optValue: "bp:systemType", type: "String"},
+                {optValue: "bp:protocol", type: "String"}
+            ]},
+            taglib: {type: "Bitpool-Tag-Library", required: false},
             property: {value:"payload", required:true,
             label:RED._("node-red:common.label.payload"),
             validate: RED.validators.typedInput("propertyType", false)},
@@ -141,73 +180,238 @@ RED.nodes.registerType('metatag',{
         label: function() {
             return this.name||"metatag";
         },
-        oneditprepare: function(){
-            // Stream tag button binding
-            $("#bitpoolStreamTagsAddButton").on("click", function() {
-                let key = $("#node-input-bitpoolStreamTags").val();
-                let value = $("#node-input-bitpoolStreamTagValue").val();
-                let tag = `${key}=${value}`;
+        oneditprepare: function() {
 
-                let currentTags = $("#node-input-StreamTags").val();
+            let node = this;
 
-                if(value !== "") {
-                    if(currentTags == "") {
-                        $("#node-input-StreamTags").val(tag);
-                    } else {
-                        let updatedTagString = `${currentTags}, ${tag}`;
-                        $("#node-input-StreamTags").val(updatedTagString);
-                    }                
-                }
-            });
-
-            $("#customStreamTagsAddButton").on("click", function() {
-                let customTag = $("#node-input-customStreamTag").val();
-                let currentTags = $("#node-input-StreamTags").val();
-
-                if(customTag !== ""){
-                    if(currentTags == "") {
-                        $("#node-input-StreamTags").val(customTag);
-                    } else {
-                        let updatedTagString = `${currentTags}, ${customTag}`;
-                        $("#node-input-StreamTags").val(updatedTagString);
+            RED.nodes.eachConfig(configNode => {
+                if(configNode.type == "Bitpool-Tag-Library") {
+                    if(configNode.enabled) {
+                        for(let i = 0; i < configNode.libJson.length; i++) {
+                            let element = configNode.libJson[i];
+                            if(node.streamTagList.map(e => e.optValue).indexOf(element.tag) === -1) {
+                                node.streamTagList.push({optValue: element.tag, type: element.type});
+                            } 
+                        }
+                    } else if(!configNode.enabled) {
+                        for(let i = 0; i < configNode.libJson.length; i++) {
+                            let element = configNode.libJson[i];
+                            let indexOf = node.streamTagList.map(e => e.optValue).indexOf(element.tag);
+                            if(indexOf !== -1) {
+                                node.streamTagList.splice(indexOf, 1);
+                            } 
+                        }
                     }
                 }
             });
 
-            //pool tags button binding
-            $("#bitpoolPoolTagsAddButton").on("click", function() {
-                let key = $("#node-input-bitpoolPoolTags").val();
-                let value = $("#node-input-bitpoolPoolTagValue").val();
-                let tag = `${key}=${value}`;
-
-                let currentTags = $("#node-input-PoolTags").val();
-
-                if(value !== "") {
-                    if(currentTags == "") {
-                        $("#node-input-PoolTags").val(tag);
-                    } else {
-                        let updatedTagString = `${currentTags}, ${tag}`;
-                        $("#node-input-PoolTags").val(updatedTagString);
-                    }                
-                }
-            });
-
-            $("#customPoolTagsAddButton").on("click", function(){
-                let customTag = $("#node-input-customPoolTag").val();
-                let currentTags = $("#node-input-PoolTags").val();
-
-                if(customTag !== ""){
-                    if(currentTags == "") {
-                        $("#node-input-PoolTags").val(customTag);
-                    } else {
-                        let updatedTagString = `${currentTags}, ${customTag}`;
-                        $("#node-input-PoolTags").val(updatedTagString);
+            let tabs = RED.tabs.create(
+                {
+                    id: "node-input-read-tabs",
+                    onchange: function (tab) {
+                        $("#node-input-tabs-content").children().hide()
+                        $("#" + tab.id).show()
                     }
-                }
-            });
+                });
 
+            tabs.addTab(
+                {
+                    id: "properties-tab",
+                    label: "Stream Tags"
+                });
+
+            tabs.addTab(
+                {
+                    id: "taglib-tab",
+                    label: "Tag Library"
+                });
+
+            $('#node-input-streamTags-container').css('min-width', '350px').editableList(
+            {
+            addItem: function (row, index, data) {
+                var registerMap = data;
+                row.css({ overflow: 'none', whiteSpace: 'nowrap' });
+
+                let fragment = document.createDocumentFragment();
+                let streamFilter = $('<div/>', { class: "form-row" }).appendTo(fragment);
+                let streamTagKey = $('<div/>', { class: "form-row streamTagKeyDropdownRow" }).appendTo(fragment);
+                let customTag = $('<div/>', { class: "form-row" }).appendTo(fragment);
+                let streamTagListField = $('<div/>', { class: "form-row" }).appendTo(fragment);
+
+
+                $('<label/>').text("Filter:").appendTo(streamFilter);
+                var streamTagFilter = $('<input/>', {class: "node-input-streamTag-filter", type: "text", placeholder: "Key words to match"}).appendTo(streamFilter)
+
+                $('<label/>').text("Tag:").appendTo(streamTagKey);
+
+                var streamTagKeyField = $('<button/>', {class: "node-input-tag-key dropbtn", id: "node-input-bitpoolStreamTags"}).text(node.streamTagList[0].optValue).appendTo(streamTagKey);
+                var streamKeyDropDownDiv =  $('<div/>', { class: "dropdown-content", id: "streamTagKeyDropDown"}).appendTo(streamTagKey);
+                var streamKeySearchInput = $('<input/>', { id: "streamTagKeySearchInput", type: "text", placeholder: "Search.."}).appendTo(streamKeyDropDownDiv);
+                var streamTagValue = $('<input/>', {class: "node-input-streamTag-value", id: "node-input-bitpoolStreamTagValue", type: "text", placeholder: "Value"}).appendTo(streamTagKey)
+
+                for (var i = 0; i < node.streamTagList.length; i++) {
+                    let a = $("<a class='streamTagOption' #href='"+node.streamTagList[i].optValue+"'>"+node.streamTagList[i].optValue+"</a>");
+                    a.click(function(e) {
+                        streamTagKeyField.text(e.target.text);
+                        streamKeyDropDownDiv.toggleClass("showStreamTagDropDown");
+                        let streamTagObj = node.streamTagList.find(ele => ele.optValue == e.target.text);
+                        if(streamTagObj.type !== "Marker") {
+                            streamTagValue.removeAttr("readonly");
+                        } else if(streamTagObj.type == "Marker") {
+                            streamTagValue.attr("readonly", true);
+                            streamTagValue.val("");
+                        }
+                    });
+
+                    streamKeyDropDownDiv.append(a);
+                }
+
+                var addStreamTagButton = $('<button class="ui-button ui-corner-all ui-widget" id="bitpoolStreamTagsAddButton" style="margin-left: 10px; padding-top: 0px; padding-bottom: 0px; min-width: fit-content;"><div>Add Tag</div></button>').appendTo(streamTagKey);
+
+                $('<label/>').text("Custom Tag:").appendTo(customTag);
+                var customTagValue = $('<input/>', {class: "node-input-customTag-value", type: "text", placeholder: "Custom Tags"}).appendTo(customTag)
+                var addCustomTagButton = $('<button class="ui-button ui-corner-all ui-widget" id="bitpoolCustomTagsAddButton" style="margin-left: 10px; padding-top: 0px; padding-bottom: 0px; min-width: fit-content;"><div>Add Tag</div></button>').appendTo(customTag);
+
+                var streamTagListValues = $('<input/>', {class: "node-input-StreamTags", id:"node-input-StreamTagsList", type: "text", placeholder: "Tag List"}).appendTo(streamTagListField);
+
+                streamKeySearchInput.keyup(function() {
+                    var input, filter, ul, li, a, i;
+                    input = streamKeySearchInput;
+                    filter = input.val().toUpperCase();
+                    div = streamKeyDropDownDiv;
+                    a = div.children("a");
+                    for (i = 0; i < a.length; i++) {
+                        txtValue = a[i].textContent || a[i].innerText;
+                        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        a[i].style.display = "";
+                        } else {
+                        a[i].style.display = "none";
+                        }
+                    }
+                });
+
+                streamTagKeyField.click(function(e) {
+                    let offset = $(e.target).offset().top + 33;
+                    streamKeyDropDownDiv.toggleClass("showStreamTagDropDown");
+                    streamKeyDropDownDiv.css("top", offset+"px");
+                });
+
+                // add button bindings
+                addStreamTagButton.click(function() {
+                    let key = streamTagKeyField.text();
+                    let value = streamTagValue.val();
+                    let tag = `${key}=${value}`;
+
+                    let currentTags = streamTagListValues.val();
+
+                    if(value !== "") {
+                        if(currentTags == "") {
+                            streamTagListValues.val(tag);
+                        } else {
+                            let updatedTagString = `${currentTags}, ${tag}`;
+                            streamTagListValues.val(updatedTagString);
+                        }
+                    } else {
+                        if(currentTags == "") {
+                            streamTagListValues.val(key);
+                        } else {
+                            let updatedTagString = `${currentTags}, ${key}`;
+                            streamTagListValues.val(updatedTagString);
+                        }
+                    }
+                });
+
+                addCustomTagButton.on("click", function() {
+                    let customTag = customTagValue.val();
+                    let currentTags = streamTagListValues.val();
+
+                    if(customTag !== "") {
+                        if(currentTags == "") {
+                            streamTagListValues.val(customTag);
+                        } else {
+                            let updatedTagString = `${currentTags}, ${customTag}`;
+                            streamTagListValues.val(updatedTagString);
+                        }
+                    } else {
+                        if(currentTags == "") {
+                            streamTagListValues.val(key);
+                        } else {
+                            let updatedTagString = `${currentTags}, ${key}`;
+                            streamTagListValues.val(updatedTagString);
+                        }
+                    }
+                });
+
+                streamTagFilter.val(registerMap.filter);
+                streamTagListValues.val(registerMap.tagList);
+
+                streamTagKey.change();
+                row[0].appendChild(fragment);
+                document.getElementById('node-input-reg-block-count').innerHTML = $("#node-input-streamTags-container").editableList('length');
+            },
+            removeItem: function (data) {
+                document.getElementById('node-input-reg-block-count').innerHTML = $("#node-input-streamTags-container").editableList('length');
+            },
+            removable: true,
+            scrollOnAdd: false,
+            header: $("<div style='display:flex; padding:10px 10px 0px 5px; column-gap: 10px'>").append($.parseHTML("<div><p>Count:</p></div><div style='color: gray'><label id='node-input-reg-block-count'>0</label></div>")),
+            buttons: [{
+                label: "json",
+                icon: "fa fa-share",
+                title: "Export tags as JSON to browser",
+                click: function (evt) {
+                var tagRegisters = $("#node-input-streamTags-container").editableList('items');
+                var mapItems = []
+                tagRegisters.each(function (i) {
+                    var registerMap = $(this);
+                    var mapItem = {
+                        filter: registerMap.find(".node-input-streamTag-filter").val(),
+                        tagList: registerMap.find("#node-input-StreamTagsList").val()
+                    };
+                    mapItems.push(mapItem);
+                });
+                var oMyBlob = new Blob([
+                    JSON.stringify(mapItems, null, 0)
+                    .replaceAll(/\[{/gi, "[\n{")
+                    .replaceAll(/}\]/gi, "}\n]")
+                    .replaceAll(/},/gi, "},\n")
+                    .replaceAll(/{/gi, "  {")
+                ], {type: 'text/json'});
+                window.open(URL.createObjectURL(oMyBlob));
+                },
+            },
+            {
+                label: "delete",
+                icon: "fa-regular fa-trash-can",
+                title: "Delete all registers",
+                click: function (evt) {
+                $("#node-input-streamTags-container").editableList('empty');
+                document.getElementById('node-input-reg-block-count').innerHTML = 0
+                },
+            }
+            ]
+            })
+
+            for (var i = 0; i < node.tagRegisters.length; i++) {
+                $("#node-input-streamTags-container").editableList('addItem', node.tagRegisters[i]);
+            }
+            document.getElementById('node-input-reg-block-count').innerHTML = node.tagRegisters.length;
+
+            
+        },
+        oneditsave: function () {
+            let node = this;
+            node.tagRegisters = [];
+            var tags = $("#node-input-streamTags-container").editableList('items');
+            tags.each(function(i) {
+                var tagMap = $(this);
+                var mapItem = {
+                    filter: tagMap.find(".node-input-streamTag-filter").val(),
+                    tagList: tagMap.find("#node-input-StreamTagsList").val()
+                };
+                node.tagRegisters.push(mapItem);
+            });
         }
     });
-
 
 </script>

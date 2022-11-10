@@ -1,0 +1,133 @@
+<!-- 
+  MIT License Copyright 2021, 2022 - Bitpool Pty Ltd
+-->
+
+<script type="text/html" data-template-name="Bitpool-Tag-Library">
+  <style>
+    .form-row {
+        align-items: center;
+        flex-wrap: nowrap !important;
+        display: flex;
+    }
+    button {
+        height: 34px;
+        border-radius: 5px !important;
+    }
+    .inputStyle {
+      color: var(--red-ui-workspace-button-color-hover) !important;
+      background: var(--red-ui-workspace-button-background-hover);
+      border: 1px solid var(--red-ui-secondary-border-color);
+      border-radius: 5px !important;
+    }
+    input[type="file"] {
+      display: none !important;
+    }
+    .custom-file-upload {
+      border: 1px solid var(--red-ui-secondary-border-color);
+      border-radius: 5px !important;
+      padding: 6px 12px;
+      cursor: pointer;
+      width: 110px !important;
+    }
+    .uploadButton {
+      margin-bottom: 5px !important;
+      margin-left: 30px !important;
+    }
+
+  </style>
+  <div class="form-row">
+      <label for="node-config-input-name"><i class="icon-tag"></i><span data-i18n="bitpool-uploader.label.name"></span> Name: </label>
+      <input type="text" id="node-config-input-name" placeholder="Config Name">
+  </div>
+
+  <div class="form-row">
+      <label for="node-config-input-file"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.file"></span>Tag Library: </label>
+      <label for="file-upload" class="custom-file-upload">
+        <i class="fa fa-upload"></i> Select File
+      </label>
+      <input type="file" id="file-upload" accept=".csv" class="inputStyle" style="width: 258px;"> 
+
+      <button id="fileUploadButton" class="inputStyle uploadButton"> Import </button>
+      
+      <input type="text" id="node-config-input-file" style="display: none;" >
+  </div>
+
+  <div class="form-row" style="display: flex; padding-top: 5px;">
+    <label for="node-config-input-fileName"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.file"></span>File name: </label>
+    <p id="fileName" >Waiting for file</p>
+    <input id="node-config-input-fileName" style="display: none;">
+  </div>
+
+  <div class="form-row" style="display: flex; align-items: flex-start; padding-top: 5px;">
+    <label for="node-config-input-enabled"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.enabled"></span>Activate Library: </label>
+    <input class="form-check-input" type="checkbox" value="" id="node-config-input-enabled" style="width: 20px;">
+  </div>
+
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('Bitpool-Tag-Library', {
+      category: 'config',
+      defaults: {
+        name: {value:""},
+        file: {value:""},
+        libJson: {value: []},
+        fileName: {value: ""},
+        enabled: {value: true}
+      },
+      label: function () {
+        return this.name || "Bitpool-Tag-Library";
+      },
+      oneditprepare: function() {
+        let node = this;
+
+        $("#fileName").text(node.fileName);
+
+        var csvFile = document.getElementById("file-upload");
+
+        csvFile.onchange = function(e) {
+          $("#fileName").text("Waiting for import");
+          $("#node-config-input-fileName").val("Waiting for import");
+          node.fileName = "Waiting for import";
+          $("#fileUploadButton").attr("style", "color: white !important; background-color: #00ADEF !important;");
+        }
+
+        $("#fileUploadButton").click(function(params) {
+          params.preventDefault();
+          const input = csvFile.files[0];
+          const reader = new FileReader();          
+          $("#fileName").text(input.name);
+          $("#node-config-input-fileName").val(input.name);
+          node.fileName = input.name;
+
+          reader.onload = function (e) {
+            const text = e.target.result;
+            let lines = text.split(/\r?\n/);
+            let nameSpace = lines[0].split(",")[1];
+            let columnHeaders = lines[2].split(",");
+            let tagNameIndex = columnHeaders.findIndex(element => element == "Tag name");
+            let typeIndex = columnHeaders.findIndex(element => element == "Type");
+
+            for(let i = 4; i < lines.length; i++) {
+              let line = lines[i].split(",");
+              let tagName = line[tagNameIndex];
+              let type = line[typeIndex];
+              let fullTag = `${nameSpace}:${tagName}`
+              if(tagName && type) {
+                let json = {
+                  tag: fullTag,
+                  type: type
+                };
+                
+                if(node.libJson.map(e => e.tag).indexOf(json.tag) === -1) node.libJson.push(json);
+              }
+            }
+
+            $("#fileUploadButton").attr("style", "color: var(--red-ui-workspace-button-color-hover) !important; background-color: var(--red-ui-workspace-button-background-hover) !important;");
+          };
+          
+          reader.readAsText(input);
+        });
+      }
+    });
+</script>

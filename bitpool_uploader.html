@@ -20,7 +20,8 @@
             uploadInterval_options: {value: "Minutes", required: true},
             bpChkShowDateOnLabel: {value: true},
             bpChkShowDebugWarnings: {value: true},
-            rebuildOnError: {value: true}
+            rebuildOnError: {value: true},
+            PoolTags: { value: "" }
         },
         inputs: 1,
         outputs: 1,
@@ -46,9 +47,51 @@
 
             tabs.addTab(
                 {
+                    id: "pooltags-tab",
+                    label: "Pool Tags"
+                }
+            );
+
+            tabs.addTab(
+                {
                     id: "options-tab",
                     label: "Options"
                 });
+
+
+
+            //pool tags button binding
+            $("#bitpoolPoolTagsAddButton").on("click", function() {
+                let key = $("#node-input-bitpoolPoolTags").val();
+                let value = $("#node-input-bitpoolPoolTagValue").val();
+                let tag = `${key}=${value}`;
+
+                let currentTags = $("#node-input-PoolTags").val();
+
+                if(value !== "") {
+                    if(currentTags == "") {
+                        $("#node-input-PoolTags").val(tag);
+                    } else {
+                        let updatedTagString = `${currentTags}, ${tag}`;
+                        $("#node-input-PoolTags").val(updatedTagString);
+                    }                
+                }
+            });
+
+           $("#customPoolTagsAddButton").on("click", function() {
+                let customTag = $("#node-input-customPoolTag").val();
+                let currentTags = $("#node-input-PoolTags").val();
+
+                if(customTag !== ""){
+                    if(currentTags == "") {
+                        $("#node-input-PoolTags").val(customTag);
+                    } else {
+                        let updatedTagString = `${currentTags}, ${customTag}`;
+                        $("#node-input-PoolTags").val(updatedTagString);
+                    }
+                }
+            });
+
         },
         oneditsave: function () {
             document.getElementById("node-input-uploadInterval").value = getTimePeriodInSeconds(
@@ -85,6 +128,18 @@
 </style>
 
 <script type="text/html" data-template-name="uploader">
+    
+    <style>
+        .form-row {
+            align-items: center;
+            flex-wrap: nowrap !important;
+            display: flex;
+        }
+        button {
+            height: 34px;
+            border-radius: 5px !important;
+        }
+    </style>
 
     <div class='form-row node-input-read-tabs-row'>
         <ul style='min-width:600px;margin-bottom:20px' id='node-input-read-tabs'></ul>
@@ -156,6 +211,41 @@
                 <label id="node-label-rebuildOnError" for="node-input-rebuildOnError" style="text-align:left; vertical-align:bottom; width: 100%; padding-left: 35px;">Rebuild stored data on upload error</label>
             </div>
 
+        </div>
+
+        <div id='pooltags-tab'>
+            <!-- Pool Tags section-->
+            <div class="form-row">
+                <p><strong>Pool Tags:</strong></p>
+            </div>
+
+            <div class="form-row" style="display: flex;">
+                <label for="node-input-bitpoolPoolTags"><i class="icon-tag"></i> Bitpool Tags:</label>
+                <select name="bpTags" id="node-input-bitpoolPoolTags" style="width: 30%; margin-right: 5px;">
+                    <option value="bp:customer">bp:customer</option>
+                    <option value="bp:address">bp:address</option>
+                    <option value="bp:latitude">bp:latitude</option>
+                    <option value="bp:longitude">bp:longitude</option>
+                    <option value="bp:email">bp:email</option>
+                    <option value="bp:phoneNumber">bp:phoneNumber</option>
+                    <option value="bp:state">bp:state</option>
+                    <option value="bp:country">bp:country</option>
+                    <option value="bp:area">bp:area</option>
+                </select>
+                <input type="text" id="node-input-bitpoolPoolTagValue" placeholder="Value" style="width: 34%; margin-right: 5px;">
+                <button class="ui-button ui-corner-all ui-widget" id="bitpoolPoolTagsAddButton" style="margin-left: 5px; padding-top: 0px; padding-bottom: 0px; 
+                min-width: fit-content;"><div>Add Tag</div></button>
+
+            </div>
+            <div class="form-row">
+                <label for="node-input-customPoolTag"><i class="icon-tag"></i> Custom Tag:</label>
+                <input type="text" id="node-input-customPoolTag" placeholder="Custom Tags" style="width: 65%;">
+                <button class="ui-button ui-corner-all ui-widget" id="customPoolTagsAddButton" style="margin-left: 10px; padding-top: 0px; padding-bottom: 0px; 
+                min-width: fit-content;"><div>Add Tag</div></button>
+            </div>
+            <div class="form-row">
+                <input type="text" id="node-input-PoolTags" placeholder="Tag List" data-role="tagsinput" style="width: 100%;">
+            </div>
         </div>
     </div>
 

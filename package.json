@@ -1,6 +1,6 @@
 {
   "name": "@bitpoolos/edge-uploader",
-  "version": "1.0.3",
+  "version": "1.0.9",
   "description": "A Node-RED module to push data to Bitpool.",
   "dependencies": {
     "async-mutex": "^0.3.2",
@@ -16,7 +16,8 @@
       "Bitpool-Pool-Settings": "bitpool_pool_settings.js",
       "Bitpool-Api-Key": "bitpool_api_key.js",
       "meta_tagging": "meta_tagging.js",
-      "Bitpool-Cloud-Settings": "bitpool_cloud_settings.js"
+      "Bitpool-Cloud-Settings": "bitpool_cloud_settings.js",
+      "Bitpool-Tag-Library": "bitpool_tag_library.js"
     }
   },
   "keywords": [
