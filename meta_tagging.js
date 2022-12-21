@@ -22,11 +22,11 @@ module.exports = function(RED) {
                     let msgTopic = msg.topic.toLowerCase();
                     let itemName = item.toLowerCase().trim();
                     if(msgTopic.includes(itemName)) {
-                        let existingTags = msg.StreamTags;
+                        let existingTags = msg.meta;
                         if(!existingTags) {
-                            msg.StreamTags = currentTag.tagList;
+                            msg.meta = currentTag.tagList;
                         } else if(!existingTags.includes(currentTag.tagList)) {
-                            msg.StreamTags = existingTags + ", " + currentTag.tagList;
+                            msg.meta = existingTags + ", " + currentTag.tagList;
                         }
                     }
                 });  

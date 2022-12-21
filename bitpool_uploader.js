@@ -87,7 +87,7 @@ module.exports = function(RED) {
                 if(node.PoolTags) msg.PoolTags = node.PoolTags;
                 
                 //get tags from msg object
-                let streamTags = msg.StreamTags ? msg.StreamTags : null;
+                let streamTags = msg.meta ? msg.meta : null;
                 let poolTags = msg.PoolTags ? msg.PoolTags : null;
 
                 //format tags 
@@ -694,7 +694,10 @@ module.exports = function(RED) {
                         logOut(res);
                         resolve(false);
                     }
-                });
+                }).catch(function(error) {
+                    reject(error);
+                    logOut("Unable to upload to bitpool, response: ", error);
+                })
             });
         }
 
