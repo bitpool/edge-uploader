@@ -167,8 +167,12 @@ module.exports = function(RED) {
 
                 }
 
-                //only build structure if valueObj has been assigned - String and Double types only
-                if(valueObj && poolName && streamName) buildStructure(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType);
+                try {
+                    //only build structure if valueObj has been assigned - String and Double types only
+                    if(valueObj && poolName && streamName) buildStructure(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType);
+                } catch(e){
+
+                }
             }
         });
 
@@ -211,6 +215,10 @@ module.exports = function(RED) {
                             node.uploading = false;
                             release();
                         }).catch(function () {
+                            applyStatus({fill:"red",shape:"dot",text:"Unable to push to Bitpool "});
+                            if(rebuildOnError) {
+                                reInitialiseUploader();
+                            }
                             release();
                         });
                     } else {
@@ -299,6 +307,8 @@ module.exports = function(RED) {
                                 node.uploader.addToLogs(log);
                                 resolve(log);
                             });
+                        }).catch(function(error) {
+                            reject(error);
                         });
 
                     } else {
@@ -328,6 +338,8 @@ module.exports = function(RED) {
                                 node.uploader.addToLogs(log);
 
                                 resolve(log);
+                            }).catch(function(error) {
+                                reject(error);
                             });
                         } else {
 
@@ -401,6 +413,7 @@ module.exports = function(RED) {
                     // add to cache 
                     node.uploader.addToLogs(log);
     
+                }).catch(function(error) {
                 });
             } else {
                 //do nothing, stream already exists
@@ -428,6 +441,8 @@ module.exports = function(RED) {
                         node.uploader.addToPoolTags(poolBody, poolObj)
                         resolve(poolObj);
                     } 
+                }).catch(function(error) {
+                    reject(error);
                 });
             });
         }
@@ -452,6 +467,8 @@ module.exports = function(RED) {
                             node.uploader.addToStreamTags(streamObj);
                             resolve(streamObj);
                         }
+                    }).catch(function(error) {
+                        reject(error);
                     });
                 }
             });
@@ -492,6 +509,10 @@ module.exports = function(RED) {
                             applyStatus({fill:"red",shape:"dot",text:"Error getting Pool. Code: " + res.status});
                             resolve(false);
                         }
+                    }).catch(function(error) {
+                        logOut("Unable to get pool: ", error);
+                        applyStatus({fill:"red",shape:"dot",text:"Error getting Pool"});
+                        reject(error);
                     });
                 }
             });
@@ -529,6 +550,10 @@ module.exports = function(RED) {
                             resolve(false);
                             applyStatus({fill:"red",shape:"dot",text:"Error getting Stream. Code: " + res.status});
                         }
+                    }).catch(function(error) {
+                        logOut("Unable to get stream: ", error);
+                        applyStatus({fill:"red",shape:"dot",text:"Error getting Stream"});
+                        reject(error);
                     });
                 }
             });
@@ -550,6 +575,10 @@ module.exports = function(RED) {
                         logOut("Unable to create pool, response: ", res);
                         resolve(false);
                     }
+                }).catch(function(error) {
+                    logOut("Unable to create pool: ", error);
+                    applyStatus({fill:"red",shape:"dot",text:"Error creating pool"});
+                    reject(error);
                 });
             });
         }
@@ -581,6 +610,10 @@ module.exports = function(RED) {
                             applyStatus({fill:"blue",shape:"dot",text:"Error creating station. Error: " + res.status});
                             reject(res);
                         }
+                    }).catch(function(error) {
+                        logOut("Unable to create station: ", error);
+                        applyStatus({fill:"blue",shape:"dot",text:"Error creating station "});
+                        reject(error);
                     });
                 } else {
                     resolve(stationExists);
@@ -612,6 +645,8 @@ module.exports = function(RED) {
                         logOut("Unable to get station, response: ", res.status);
                         applyStatus({fill:"red",shape:"dot",text:"Error getting Station in pool. Error: " + res.status});
                     }
+                }).catch(function(error) {
+                    reject(error);
                 });
             });
         }
@@ -697,7 +732,7 @@ module.exports = function(RED) {
                 }).catch(function(error) {
                     reject(error);
                     logOut("Unable to upload to bitpool, response: ", error);
-                })
+                });
             });
         }
 
@@ -730,6 +765,8 @@ module.exports = function(RED) {
                             applyStatus({fill:"red",shape:"dot",text:"Error pushing tags to stream. Error: " + res.status});
                             resolve(false);
                         }
+                    }).catch(function(error) {
+                        reject(error);
                     });
                 }
             });
@@ -750,6 +787,8 @@ module.exports = function(RED) {
                             applyStatus({fill:"red",shape:"dot",text:"Error pushing tags to pool. Error: " + res.status});
                             resolve(false);
                         }
+                    }).catch(function(error) {
+                        reject(error);
                     });
                 }
             });
