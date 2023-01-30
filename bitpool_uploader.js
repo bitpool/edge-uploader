@@ -169,8 +169,15 @@ module.exports = function(RED) {
 
                 try {
                     //only build structure if valueObj has been assigned - String and Double types only
-                    if(valueObj && poolName && streamName) buildStructure(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType);
-                } catch(e){
+                    if(valueObj && poolName && streamName) {
+                        buildStructure(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType).then(function() {
+
+                        }).catch(function(e) {
+                            logOut(e);
+                            applyStatus({fill:"red",shape:"dot",text:"Unable to set up pools or streams"});
+                        });
+                    }
+                } catch(e) {
 
                 }
             }
@@ -424,26 +431,32 @@ module.exports = function(RED) {
         function setUpPool(poolBody) {
             return new Promise(function(resolve, reject) {
                 //returns pool object if found in api
-                getPoolIfExists(poolBody).then(function(poolObj) {
-                    //create pool if doesnt exist
-                    if(poolObj === false) {
-                        createPool(poolBody).then(function(poolObj) {
-                            resolve(poolObj);
-                        });
-
-                        // Unable to create pool, stop process. 
+                try {
+                    getPoolIfExists(poolBody).then(function(poolObj) {
+                        //create pool if doesnt exist
                         if(poolObj === false) {
-                            applyStatus({fill:"red",shape:"dot",text:"Unable to create Pool. Check settings"});
-                            return;
-                        }
-                        
-                    } else {
-                        node.uploader.addToPoolTags(poolBody, poolObj)
-                        resolve(poolObj);
-                    } 
-                }).catch(function(error) {
-                    reject(error);
-                });
+                            createPool(poolBody).then(function(poolObj) {
+                                resolve(poolObj);
+                            });
+    
+                            // Unable to create pool, stop process. 
+                            if(poolObj === false) {
+                                applyStatus({fill:"red",shape:"dot",text:"Unable to create Pool. Check settings"});
+                                return;
+                            }
+                            
+                        } else {
+                            node.uploader.addToPoolTags(poolBody, poolObj)
+                            resolve(poolObj);
+                        } 
+                    }).catch(function(error) {
+                        reject(error);
+                    });
+                } catch (e) {
+                    
+                    reject(e);
+
+                }
             });
         }
 
@@ -480,40 +493,44 @@ module.exports = function(RED) {
 
             return new Promise(function(resolve, reject) {
                 if(body) {
-                    let uri = `${node.rootUrlv1}pools/web-search?public=${body.Public}&virtual=${body.Virtual}&includeHidden=false&organisationOnly=true&search=${body.Poolname}&orderBy=Name&desc=false&take=5&skip=0`;
-                    fetch(uri, {method: 'GET', headers: headers, agent: agent})
-                    .then(function(res) {
-                        if(res.status == 200){
-                            res.json().then(function(payload) {    
-                                if(payload.Pools.length > 0) {
-                                    let foundPool = null;
-                                    payload.Pools.forEach(function(poolObj){
-                                        if(poolObj.Name == body.Poolname) {
-                                            foundPool = poolObj;
+                    try {
+                        let uri = `${node.rootUrlv1}pools/web-search?public=${body.Public}&virtual=${body.Virtual}&includeHidden=false&organisationOnly=true&search=${body.Poolname}&orderBy=Name&desc=false&take=5&skip=0`;
+                        fetch(uri, {method: 'GET', headers: headers, agent: agent})
+                        .then(function(res) {
+                            if(res.status == 200){
+                                res.json().then(function(payload) {    
+                                    if(payload.Pools.length > 0) {
+                                        let foundPool = null;
+                                        payload.Pools.forEach(function(poolObj){
+                                            if(poolObj.Name == body.Poolname) {
+                                                foundPool = poolObj;
+                                            }
+                                        });
+                                        if(foundPool !== null) {
+                                            applyStatus({fill:"blue",shape:"dot",text:"Found Pool"});
+                                            resolve(foundPool);
+                                        } else {
+                                            applyStatus({fill:"blue",shape:"dot",text:"No Pool found"});
+                                            resolve(false);
                                         }
-                                    });
-                                    if(foundPool !== null) {
-                                        applyStatus({fill:"blue",shape:"dot",text:"Found Pool"});
-                                        resolve(foundPool);
                                     } else {
                                         applyStatus({fill:"blue",shape:"dot",text:"No Pool found"});
                                         resolve(false);
                                     }
-                                } else {
-                                    applyStatus({fill:"blue",shape:"dot",text:"No Pool found"});
-                                    resolve(false);
-                                }
-                            });
-                        } else {
-                            logOut("Unable to get pool, response: ", res);
-                            applyStatus({fill:"red",shape:"dot",text:"Error getting Pool. Code: " + res.status});
-                            resolve(false);
-                        }
-                    }).catch(function(error) {
-                        logOut("Unable to get pool: ", error);
-                        applyStatus({fill:"red",shape:"dot",text:"Error getting Pool"});
-                        reject(error);
-                    });
+                                });
+                            } else {
+                                logOut("Unable to get pool, response: ", res);
+                                applyStatus({fill:"red",shape:"dot",text:"Error getting Pool. Code: " + res.status});
+                                resolve(false);
+                            }
+                        }).catch(function(error) {
+                            logOut("Unable to get pool: ", error);
+                            applyStatus({fill:"red",shape:"dot",text:"Error getting Pool"});
+                            reject(error);
+                        }); 
+                    } catch (e) {
+                        logOut(e);
+                    }
                 }
             });
         };
