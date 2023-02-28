@@ -142,7 +142,7 @@ module.exports = function(RED) {
 
                 //get msg.payload data type
                 let dataType = getDataType(msg.payload);
-
+                
                 const now = new Date();
 
                 //object to be used in bulk upload
@@ -821,6 +821,8 @@ module.exports = function(RED) {
                 return "JSONObject"
             } else if(isJsonString(value) == true){
                 return "JSONObject"
+            } else if(value == 0 && typeof value == "number") {
+                return "Double"
             } else if(value == "") {
                 return "Empty"
             } else if(value == null || value == undefined || value == 'undefined') {
