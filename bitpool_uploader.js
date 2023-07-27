@@ -97,6 +97,7 @@ module.exports = function(RED) {
                     } else {
                         streamTags = [streamTags]
                     }
+                    streamTags = removeNameSpacePrefix(streamTags);
                 }
 
                 //format tags
@@ -106,10 +107,12 @@ module.exports = function(RED) {
                     } else {
                         poolTags = [poolTags];
                     }
-                    poolTags = poolTags.concat([`bp:operatingSystem=${os.version()}`, `bp:nodejsVersion=${process.version}`, `bp:nodeRedVersion=${RED.version()}`])
+                    poolTags = poolTags.concat([`operatingSystem=${os.version()}`, `nodejsVersion=${process.version}`, `nodeRedVersion=${RED.version()}`])
                 } else {
-                    poolTags = [`bp:operatingSystem=${os.version()}`, `bp:nodejsVersion=${process.version}`, `bp:nodeRedVersion=${RED.version()}`];
+                    poolTags = [`operatingSystem=${os.version()}`, `nodejsVersion=${process.version}`, `nodeRedVersion=${RED.version()}`];
                 }
+
+                poolTags = removeNameSpacePrefix(poolTags);
 
                 //set pending status
                 applyStatus({fill:"blue",shape:"dot",text:"Processing " + new Date().toLocaleString()});
@@ -840,6 +843,16 @@ module.exports = function(RED) {
                         break;
                 }
             }
+        }
+
+        function removeNameSpacePrefix(tags) {
+            for(let index = 0; index < tags.length; index++) {
+                if(tags[index].includes(":")) {                    
+                    const splitTag = tags[index].split(":")
+                    tags[index] = splitTag[1];
+                }
+            };
+            return tags;
         }
 
         function isJsonString(strData) {

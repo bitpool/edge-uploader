@@ -112,7 +112,7 @@
               let line = lines[i].split(",");
               let tagName = line[tagNameIndex];
               let type = line[typeIndex];
-              let fullTag = `${nameSpace}:${tagName}`
+              let fullTag = `${tagName}`
               if(tagName && type) {
                 let json = {
                   tag: fullTag,
