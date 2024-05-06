@@ -96,104 +96,104 @@ module.exports = function (RED) {
 
         //Main function that occurs on node input
         node.on('input', function (msg, send, done) {
-            if (msg.BPCommand == "REBUILD") {
-                //triggers object rebuild. 
-                reInitialiseUploader();
-            } else {
-                if (node.PoolTags) msg.PoolTags = node.PoolTags;
+            try {
+                if (msg.BPCommand == "REBUILD") {
+                    //triggers object rebuild. 
+                    reInitialiseUploader();
+                } else {
+                    if (node.PoolTags) msg.PoolTags = node.PoolTags;
 
-                //get tags from msg object
-                let streamTags = msg.meta ? msg.meta : null;
-                let poolTags = msg.PoolTags ? msg.PoolTags : null;
+                    //get tags from msg object
+                    let streamTags = msg.meta ? msg.meta : null;
+                    let poolTags = msg.PoolTags ? msg.PoolTags : null;
 
-                //format tags 
-                if (streamTags && streamTags !== "") {
-                    if (streamTags.includes(",")) {
-                        streamTags = streamTags.split(", ");
-                    } else {
-                        streamTags = [streamTags]
+                    //format tags 
+                    if (streamTags && streamTags !== "") {
+                        if (streamTags.includes(",")) {
+                            streamTags = streamTags.split(", ");
+                        } else {
+                            streamTags = [streamTags]
+                        }
+                        streamTags = removeNameSpacePrefix(streamTags);
                     }
-                    streamTags = removeNameSpacePrefix(streamTags);
-                }
 
-                //format tags
-                if (poolTags && poolTags !== "") {
-                    if (poolTags.includes(",")) {
-                        poolTags = poolTags.split(", ");
+                    //format tags
+                    if (poolTags && poolTags !== "") {
+                        if (poolTags.includes(",")) {
+                            poolTags = poolTags.split(", ");
+                        } else {
+                            poolTags = [poolTags];
+                        }
+                        poolTags = poolTags.concat([`operatingSystem=${os.version()}`, `nodejsVersion=${process.version}`, `nodeRedVersion=${RED.version()}`])
                     } else {
-                        poolTags = [poolTags];
+                        poolTags = [`operatingSystem=${os.version()}`, `nodejsVersion=${process.version}`, `nodeRedVersion=${RED.version()}`];
                     }
-                    poolTags = poolTags.concat([`operatingSystem=${os.version()}`, `nodejsVersion=${process.version}`, `nodeRedVersion=${RED.version()}`])
-                } else {
-                    poolTags = [`operatingSystem=${os.version()}`, `nodejsVersion=${process.version}`, `nodeRedVersion=${RED.version()}`];
-                }
 
-                poolTags = removeNameSpacePrefix(poolTags);
+                    poolTags = removeNameSpacePrefix(poolTags);
 
-                //set pending status
-                applyStatus({ fill: "blue", shape: "dot", text: "Processing " + new Date().toLocaleString() });
+                    //set pending status
+                    applyStatus({ fill: "blue", shape: "dot", text: "Processing " + new Date().toLocaleString() });
 
-                let poolBody = {
-                    "Poolname": "",
-                    "Public": public,
-                    "Virtual": virtual
-                };
-
-                //set pool name, from msg.pool or uploader setting
-                let poolName;
-                if (msg.pool && msg.pool !== "") {
-                    poolBody.Poolname = msg.pool;
-                    poolName = msg.pool;
-                } else {
-                    poolBody.Poolname = pool_name;
-                    poolName = pool_name;
-                }
-
-                //set stream name, from msg.topic or uploader setting
-                let streamName;
-                if (msg.topic && msg.topic !== "") {
-                    streamName = msg.topic
-                } else if (msg.stream && msg.stream !== "") {
-                    streamName = msg.stream;
-                } else {
-                    streamName = stream_name;
-                }
-
-                //get msg.payload data type
-                let dataType = getDataType(msg.payload);
-
-                const now = new Date();
-
-                //object to be used in bulk upload
-                let valueObj;
-
-                //Support for different data types
-                if (dataType === "Double") {
-                    valueObj = {
-                        "Ts": now.toISOString(),
-                        "Val": msg.payload,
-                        "ValStr": null,
-                        "Calculated": false
+                    let poolBody = {
+                        "Poolname": "",
+                        "Public": public,
+                        "Virtual": virtual
                     };
-                } else if (dataType === "String") {
-                    valueObj = {
-                        "Ts": now.toISOString(),
-                        "Val": null,
-                        "ValStr": msg.payload,
-                        "Calculated": false
-                    };
-                }
 
-                try {
-                    //only build structure if valueObj has been assigned - String and Double types only
+                    //set pool name, from msg.pool or uploader setting
+                    let poolName;
+                    if (msg.pool && msg.pool !== "") {
+                        poolBody.Poolname = msg.pool;
+                        poolName = msg.pool;
+                    } else {
+                        poolBody.Poolname = pool_name;
+                        poolName = pool_name;
+                    }
+
+                    //set stream name, from msg.topic or uploader setting
+                    let streamName;
+                    if (msg.topic && msg.topic !== "") {
+                        streamName = msg.topic
+                    } else if (msg.stream && msg.stream !== "") {
+                        streamName = msg.stream;
+                    } else {
+                        streamName = stream_name;
+                    }
+
+                    //get msg.payload data type
+                    let dataType = getDataType(msg.payload);
+
+                    const now = new Date();
+
+                    //object to be used in bulk upload
+                    let valueObj;
+
+                    //Support for different data types
+                    if (dataType === "Double") {
+                        valueObj = {
+                            "Ts": now.toISOString(),
+                            "Val": msg.payload,
+                            "ValStr": null,
+                            "Calculated": false
+                        };
+                    } else if (dataType === "String") {
+                        valueObj = {
+                            "Ts": now.toISOString(),
+                            "Val": null,
+                            "ValStr": msg.payload,
+                            "Calculated": false
+                        };
+                    }
+
+                    //only add to queue if valueObj has been assigned - String and Double types only
                     if (valueObj && poolName && streamName) {
                         this.uploader.addToQueue(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType);
                         applyStatus({ fill: "blue", shape: "dot", text: "Message in queue " + new Date().toLocaleString() });
                     }
-                } catch (e) {
-                    logOut(e);
-                    applyStatus({ fill: "red", shape: "dot", text: "Unable to set up pools or streams" });
                 }
+            } catch (e) {
+                logOut("Unable to handle input", e);
+                applyStatus({ fill: "red", shape: "dot", text: "Unable to handle input" });
             }
             // Once finished, call 'done'.
             // This call is wrapped in a check that 'done' exists
@@ -221,7 +221,7 @@ module.exports = function (RED) {
                         try {
                             await buildStructure(item.poolBody, item.poolName, item.streamName, item.poolTags, item.streamTags, item.valueObj, item.dataType);
                         } catch (e) {
-                            logOut(e);
+                            logOut("Unable to set up pools or streams", e);
                             applyStatus({ fill: "red", shape: "dot", text: "Unable to set up pools or streams" });
                         }
                     }
@@ -265,7 +265,9 @@ module.exports = function (RED) {
                     //set pending status
                     applyStatus({ fill: "blue", shape: "dot", text: count + " Logs Cached" });
                 }
-            } finally {
+            } catch (e) {
+                logOut("Error in checkState", e);
+            }finally {
                 release();
             }
         }
@@ -287,135 +289,120 @@ module.exports = function (RED) {
         }
 
         async function buildStructure(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType) {
-            try {
-                //check if log exists in cache
-                let logExists = node.uploader.getLog(poolName, streamName) === undefined ? false : true;
+            //check if log exists in cache
+            let logExists = node.uploader.getLog(poolName, streamName) === undefined ? false : true;
 
-                if (!logExists) {
+            if (!logExists) {
 
-                    // Log doesnt exist in cache, handle the creation of new log. 
-                    // Check api for pool, create a new pool if not found
-                    // Check api for stream, create a new station and stream within pool if not found
+                // Log doesnt exist in cache, handle the creation of new log. 
+                // Check api for pool, create a new pool if not found
+                // Check api for stream, create a new station and stream within pool if not found
 
-                    let poolExists = node.uploader.getPool(poolName) === undefined ? false : true;
+                let poolExists = node.uploader.getPool(poolName) === undefined ? false : true;
 
-                    let poolObj;
-                    let poolKey;
-                    let streamObj;
+                let poolObj;
+                let poolKey;
+                let streamObj;
 
-                    if (!poolExists) {
-                        poolObj = await setUpPool(poolBody);
+                if (!poolExists) {
+                    poolObj = await setUpPool(poolBody);
 
-                        //set poolKey, based on 2 potential objects
-                        poolKey = poolObj.PoolKey;
+                    poolKey = poolObj.PoolKey;
 
-                        // add pool to cache
-                        node.uploader.addPool({ poolName: poolName, PoolKey: poolKey });
+                    // add pool to cache
+                    node.uploader.addPool({ poolName: poolName, PoolKey: poolKey });
 
-                        let poolTagsChanged = node.uploader.getPoolTagsChanged(poolKey, poolTags);
+                    let poolTagsChanged = node.uploader.getPoolTagsChanged(poolKey, poolTags);
 
-                        if (poolTagsChanged) {
-                            await addTagsToPool(poolKey, poolTags);
-                            node.uploader.updatePoolTags(poolKey, poolTags);
-                        }
-
-                        streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
-
-                        //set streamkey, based on 2 potential objects
-                        let streamKey = streamObj.StreamKey;
-
-                        let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, streamTags);
-
-                        if (streamTagsChanged) {
-                            await addTagsToStream(streamKey, streamTags);
-                            node.uploader.updateStreamTags(streamKey, streamTags);
-                        }
-
-                        // create new log
-                        let log = new Log(poolName, streamName, poolTags, streamTags, poolKey, streamKey, valueObj);
-
-                        // add to cache 
-                        node.uploader.addToLogs(log);
-                        return log;
-                    } else {
-
-                        poolObj = node.uploader.getPool(poolName);
-                        poolKey = poolObj.PoolKey;
-
-                        streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
-
-                        //set streamkey, based on 2 potential objects
-                        let streamKey = streamObj.StreamKey;
-
-                        let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, streamTags);
-
-                        if (streamTagsChanged) {
-                            await addTagsToStream(streamKey, streamTags);
-                            node.uploader.updateStreamTags(streamKey, streamTags);
-                        }
-
-                        // create new log
-                        let log = new Log(poolName, streamName, poolTags, streamTags, poolKey, streamKey, valueObj);
-
-                        // add to cache 
-                        node.uploader.addToLogs(log);
-
-                        return log;
-                    }
-
-                } else {
-                    // Log exists in cache, update with new value object
-
-                    let foundLog = node.uploader.getLog(poolName, streamName);
-
-                    node.uploader.updateLog(foundLog, valueObj);
-
-                    let poolTagsChanged = node.uploader.getPoolTagsChanged(foundLog.poolkey, poolTags);
-
-                    //update pool tags if changed
                     if (poolTagsChanged) {
-                        await addTagsToPool(foundLog.poolkey, poolTags);
-                        node.uploader.updatePoolTags(foundLog.poolkey, poolTags);
+                        await addTagsToPool(poolKey, poolTags);
+                        node.uploader.updatePoolTags(poolKey, poolTags);
                     }
 
-                    let streamTagsChanged = node.uploader.getStreamTagsChanged(foundLog.streamKey, streamTags);
+                    streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
 
-                    //update stream tags if changed
+                    let streamKey = streamObj.StreamKey;
+
+                    let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, streamTags);
+
                     if (streamTagsChanged) {
-                        await addTagsToStream(foundLog.streamKey, streamTags);
-                        node.uploader.updateStreamTags(foundLog.streamKey, streamTags);
+                        await addTagsToStream(streamKey, streamTags);
+                        node.uploader.updateStreamTags(streamKey, streamTags);
                     }
 
-                    return foundLog;
+                    // create new log
+                    let log = new Log(poolName, streamName, poolTags, streamTags, poolKey, streamKey, valueObj);
+
+                    // add to cache 
+                    node.uploader.addToLogs(log);
+                    return log;
+                } else {
+
+                    poolObj = node.uploader.getPool(poolName);
+                    poolKey = poolObj.PoolKey;
+
+                    streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
+
+                    let streamKey = streamObj.StreamKey;
+
+                    let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, streamTags);
+
+                    if (streamTagsChanged) {
+                        await addTagsToStream(streamKey, streamTags);
+                        node.uploader.updateStreamTags(streamKey, streamTags);
+                    }
+
+                    // create new log
+                    let log = new Log(poolName, streamName, poolTags, streamTags, poolKey, streamKey, valueObj);
+
+                    // add to cache 
+                    node.uploader.addToLogs(log);
+
+                    return log;
                 }
-            } catch (error) {
-                throw error;
+
+            } else {
+                // Log exists in cache, update with new value object
+
+                let foundLog = node.uploader.getLog(poolName, streamName);
+
+                node.uploader.updateLog(foundLog, valueObj);
+
+                let poolTagsChanged = node.uploader.getPoolTagsChanged(foundLog.poolkey, poolTags);
+
+                //update pool tags if changed
+                if (poolTagsChanged) {
+                    await addTagsToPool(foundLog.poolkey, poolTags);
+                    node.uploader.updatePoolTags(foundLog.poolkey, poolTags);
+                }
+
+                let streamTagsChanged = node.uploader.getStreamTagsChanged(foundLog.streamKey, streamTags);
+
+                //update stream tags if changed
+                if (streamTagsChanged) {
+                    await addTagsToStream(foundLog.streamKey, streamTags);
+                    node.uploader.updateStreamTags(foundLog.streamKey, streamTags);
+                }
+
+                return foundLog;
             }
         };
 
         async function setUpPool(poolBody) {
-            try {
-                const poolObj = await createOrGetPool(poolBody);
-                poolObj.Tags = await loadTagsPool(poolObj.PoolKey);
-                node.uploader.addToPoolTags(poolBody, poolObj);
-                return poolObj;
-            } catch (e) {
-                throw e;
-            }
+            const poolObj = await createOrGetPool(poolBody);
+            node.uploader.addToPoolTags(poolBody, poolObj);
+            return poolObj;
         }
 
         async function setupStreams(poolObj, poolKey, streamName, dataType) {
-            try {
-                if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null &&
-                    typeof streamName !== 'undefined' && streamName !== "" && streamName !== null
-                ) {
-                    const streamObj = await createOrGetStream(poolObj, streamName, dataType);
-                    node.uploader.addToStreamTags(streamObj);
-                    return streamObj;
-                }
-            } catch (error) {
-                applyStatus({ fill: "red", shape: "dot", text: "Unable to create Stream. Check settings" });
-                throw error;
+            if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null &&
+                typeof streamName !== 'undefined' && streamName !== "" && streamName !== null
+            ) {
+                const streamObj = await createOrGetStream(poolObj, streamName, dataType);
+                node.uploader.addToStreamTags(streamObj);
+                return streamObj;
+            } else {
+                throw new Error("Unable to create Stream. Check settings.");
             }
         }
 
@@ -427,6 +414,7 @@ module.exports = function (RED) {
                 const res = await fetch(node.rootUrlv2 + "pools", { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(body) });
                 if (res.status == 200) {
                     const payload = await res.json();
+                    payload.Tags = await loadTagsPool(payload.PoolKey);
                     return payload;
                 } else {
                     const text = await res.text();
@@ -526,7 +514,7 @@ module.exports = function (RED) {
             } catch (error) {
                 logOut(error);
                 applyStatus({ fill: "red", shape: "dot", text: "Error loading Stream" });
-                return false;
+                throw error;
             }
         }
 
@@ -570,55 +558,51 @@ module.exports = function (RED) {
             }
         }
 
-        function addTagsToStream(streamKey, tags) {
+        async function addTagsToStream(streamKey, tags) {
             //push tags to stream
             if (tags && tags !== "" && tags.length > 0 && streamKey) {
-                let newTagResult = pushNewTagsToStream(streamKey, tags);
+                let newTagResult = await pushNewTagsToStream(streamKey, tags);
             }
         }
 
-        function addTagsToPool(poolKey, tags) {
+        async function addTagsToPool(poolKey, tags) {
             //push tags to pool
             if (tags && tags !== "" && tags.length > 0 && poolKey) {
-                let newTagResult = pushNewTagsToPool(poolKey, tags);
+                let newTagResult = await pushNewTagsToPool(poolKey, tags);
             }
         }
 
         //Inserts specified tags to current stream
         async function pushNewTagsToStream(streamKey, tags) {
-            try {
-                applyStatus({ fill: "blue", shape: "dot", text: "Pushing tags to stream" });
-                if (typeof streamKey !== 'undefined' && streamKey !== "" && streamKey !== null && tags) {
-                    const res = await fetch(node.rootUrlv3 + `stream/${streamKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
-                    //returns true if sucessfully added tags
-                    if (res.status == 204 || res.status == 200) {
-                        return true;
-                    } else {
-                        applyStatus({ fill: "red", shape: "dot", text: "Error pushing tags to stream. Error: " + res.status });
-                        return false;
-                    }
+            applyStatus({ fill: "blue", shape: "dot", text: "Pushing tags to stream" });
+            if (typeof streamKey !== 'undefined' && streamKey !== "" && streamKey !== null && tags) {
+                const res = await fetch(node.rootUrlv3 + `stream/${streamKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
+                //returns true if sucessfully added tags
+                if (res.status == 204 || res.status == 200) {
+                    return true;
+                } else {
+                    applyStatus({ fill: "red", shape: "dot", text: "Error pushing tags to stream. Error: " + res.status });
+                    return false;
                 }
-            } catch (error) {
-                throw error;
+            } else {
+                return false;
             }
         }
 
         //Inserts specified tags to current pool
         async function pushNewTagsToPool(poolKey, tags) {
-            try {
-                applyStatus({ fill: "blue", shape: "dot", text: "Pushing tags to pool" });
-                if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null && tags) {
-                    const res = await fetch(node.rootUrlv3 + `pool/${poolKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
-                    //returns true if sucessfully added tags
-                    if (res.status == 204 || res.status == 200) {
-                        return true;
-                    } else {
-                        applyStatus({ fill: "red", shape: "dot", text: "Error pushing tags to pool. Error: " + res.status });
-                        return false;
-                    }
+            applyStatus({ fill: "blue", shape: "dot", text: "Pushing tags to pool" });
+            if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null && tags) {
+                const res = await fetch(node.rootUrlv3 + `pool/${poolKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
+                //returns true if sucessfully added tags
+                if (res.status == 204 || res.status == 200) {
+                    return true;
+                } else {
+                    applyStatus({ fill: "red", shape: "dot", text: "Error pushing tags to pool. Error: " + res.status });
+                    return false;
                 }
-            } catch (error) {
-                throw error;
+            } else {
+                return false;
             }
         }
 
