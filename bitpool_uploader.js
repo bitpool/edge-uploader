@@ -522,9 +522,11 @@ module.exports = function(RED) {
                                     }
                                 });
                             } else {
-                                logOut("Unable to get pool, response: ", res);
-                                applyStatus({fill:"red",shape:"dot",text:"Error getting Pool. Code: " + res.status});
-                                resolve(false);
+                                res.text().then(text => { 
+                                    logOut("Unable to get pool, response: ", `${res.status}: ${text}`);
+                                    applyStatus({fill:"red",shape:"dot",text:"Error getting Pool. Code: " + res.status});
+                                    resolve(false);
+                                });
                             }
                         }).catch(function(error) {
                             logOut("Unable to get pool: ", error);
@@ -566,9 +568,11 @@ module.exports = function(RED) {
                                 }
                             });
                         } else {
-                            logOut("Unable to get stream, response: ", res.status);
-                            resolve(false);
-                            applyStatus({fill:"red",shape:"dot",text:"Error getting Stream. Code: " + res.status});
+                            res.text().then(text => { 
+                                logOut("Unable to get stream, response: ", `${res.status}: ${text}`);
+                                resolve(false);
+                                applyStatus({fill:"red",shape:"dot",text:"Error getting Stream. Code: " + res.status});
+                            });
                         }
                     }).catch(function(error) {
                         logOut("Unable to get stream: ", error);
@@ -592,8 +596,10 @@ module.exports = function(RED) {
                             resolve(payload);
                         });
                     } else {
-                        logOut("Unable to create pool, response: ", res);
-                        resolve(false);
+                        res.text().then(text => { 
+                            logOut("Unable to create pool, response: ", `${res.status}: ${text}`);
+                            resolve(false);
+                        });
                     }
                 }).catch(function(error) {
                     logOut("Unable to create pool: ", error);
@@ -625,10 +631,11 @@ module.exports = function(RED) {
                                 resolve(payload);
                             });
                         } else {
-                            logOut("Unable to create station, response: ");
-                            logOut(res);
-                            applyStatus({fill:"blue",shape:"dot",text:"Error creating station. Error: " + res.status});
-                            reject(res);
+                            res.text().then(text => { 
+                                logOut("Unable to create station, response: ", `${res.status}: ${text}`);
+                                applyStatus({fill:"blue",shape:"dot",text:"Error creating station. Error: " + res.status});
+                                reject(res);
+                            });
                         }
                     }).catch(function(error) {
                         logOut("Unable to create station: ", error);
@@ -645,6 +652,10 @@ module.exports = function(RED) {
         function getStationIfExists(poolKey) {
             applyStatus({fill:"blue",shape:"dot",text:"Getting Station for stream"});
             return new Promise(function(resolve, reject) {
+                const stationCached = node.uploader.getStation(poolKey);
+                if (stationCached && stationCached.StationID) {
+                    resolve(stationCached);
+                }
                 fetch(node.rootUrlv2 + `pools/${poolKey}/stations`, {method: 'GET', headers: headers, agent: agent})
                 .then(function(res){
                     if(res.status == 200){
@@ -661,9 +672,11 @@ module.exports = function(RED) {
                             }
                         });
                     } else {
-                        resolve(false);
-                        logOut("Unable to get station, response: ", res.status);
-                        applyStatus({fill:"red",shape:"dot",text:"Error getting Station in pool. Error: " + res.status});
+                        res.text().then(text => { 
+                            logOut("Unable to get station, response: ", `${res.status}: ${text}`);
+                            applyStatus({fill:"red",shape:"dot",text:"Error getting Station in pool. Error: " + res.status});
+                            resolve(false);
+                        });
                     }
                 }).catch(function(error) {
                     reject(error);
@@ -704,10 +717,11 @@ module.exports = function(RED) {
                                             resolve(payload);
                                         });
                                     } else {
-                                        logOut("Unable to create stream, response: ", res);
-                                        logOut(res);
-                                        applyStatus({fill:"red",shape:"dot",text:"Error creating Stream. Error: " + res.status});
-                                        resolve(false);
+                                        res.text().then(text => { 
+                                            logOut("Unable to create stream, response: ", `${res.status}: ${text}`);
+                                            applyStatus({fill:"red",shape:"dot",text:"Error creating Stream. Error: " + res.status});
+                                            resolve(false);
+                                        });
                                     }
                                 }).catch(function(error) {
                                     logOut(error);
@@ -745,13 +759,14 @@ module.exports = function(RED) {
                     if(res.status == 200) {
                         resolve(true);
                     } else {
-                        logOut("Unable to upload to bitpool, response: ", res);
-                        logOut(res);
-                        resolve(false);
+                        res.text().then(text => { 
+                            logOut("Unable to upload to bitpool, response: ", `${res.status}: ${text}`);
+                            resolve(false);
+                        });
                     }
                 }).catch(function(error) {
+                    logOut("Unable to upload to bitpool: ", error);
                     reject(error);
-                    logOut("Unable to upload to bitpool, response: ", error);
                 });
             });
         }
