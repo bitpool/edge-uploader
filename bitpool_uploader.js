@@ -11,7 +11,7 @@ module.exports = function (RED) {
     const { Log } = require("./log")
     const { ToadScheduler, SimpleIntervalJob, Task, AsyncTask } = require('toad-scheduler')
     const os = require("os");
-    const { Mutex, Semaphore, withTimeout } = require("async-mutex");
+    const { Mutex } = require("async-mutex");
 
     function BITPOOL(config) {
         RED.nodes.createNode(this, config);
