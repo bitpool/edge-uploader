@@ -300,8 +300,9 @@ module.exports = function (RED) {
                         poolObj = await setUpPool(poolBody);
 
                         //set poolKey, based on 2 potential objects
-                        poolKey = poolObj.Id || poolObj.PoolKey;
+                        poolKey = poolObj.PoolKey;
 
+                        // add pool to cache
                         node.uploader.addPool({ poolName: poolName, PoolKey: poolKey });
 
                         let poolTagsChanged = node.uploader.getPoolTagsChanged(poolKey, poolTags);
@@ -311,13 +312,10 @@ module.exports = function (RED) {
                             node.uploader.updatePoolTags(poolKey, poolTags);
                         }
 
-                        // add pool to cache
-                        node.uploader.addPool({ poolName: poolName, PoolKey: poolKey });
-
                         streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
 
                         //set streamkey, based on 2 potential objects
-                        let streamKey = streamObj.Id || streamObj.StreamKey;
+                        let streamKey = streamObj.StreamKey;
 
                         let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, streamTags);
 
@@ -337,38 +335,25 @@ module.exports = function (RED) {
                         poolObj = node.uploader.getPool(poolName);
                         poolKey = poolObj.PoolKey;
 
-                        if (poolKey !== null) {
-                            streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
+                        streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
 
+                        //set streamkey, based on 2 potential objects
+                        let streamKey = streamObj.StreamKey;
 
-                            //set streamkey, based on 2 potential objects
-                            let streamKey = streamObj.Id || streamObj.StreamKey;
+                        let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, streamTags);
 
-                            let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, streamTags);
-
-                            if (streamTagsChanged) {
-                                await addTagsToStream(streamKey, streamTags);
-                                node.uploader.updateStreamTags(streamKey, streamTags);
-                            }
-
-                            // create new log
-                            let log = new Log(poolName, streamName, poolTags, streamTags, poolKey, streamKey, valueObj);
-
-                            // add to cache 
-                            node.uploader.addToLogs(log);
-
-                            return log;
-                        } else {
-                            let metaDataObj = {
-                                poolName: poolName,
-                                streamName: streamName,
-                                dataType: dataType,
-                                poolTags: poolTags,
-                                streamTags: streamTags,
-                                valueObj: valueObj
-                            };
-                            await streamCallback(poolObj, poolKey, metaDataObj);
+                        if (streamTagsChanged) {
+                            await addTagsToStream(streamKey, streamTags);
+                            node.uploader.updateStreamTags(streamKey, streamTags);
                         }
+
+                        // create new log
+                        let log = new Log(poolName, streamName, poolTags, streamTags, poolKey, streamKey, valueObj);
+
+                        // add to cache 
+                        node.uploader.addToLogs(log);
+
+                        return log;
                     }
 
                 } else {
@@ -401,52 +386,11 @@ module.exports = function (RED) {
             }
         };
 
-        async function streamCallback(poolObj, poolKey, meta) {
-            let streamName = meta.streamName;
-            let dataType = meta.dataType;
-
-            let log = node.uploader.getLog(poolObj.poolName, streamName);
-
-            let logExists = log === undefined ? false : true;
-
-            if (!logExists) {
-                try {
-                    const streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
-
-                    //set streamkey, based on 2 potential objects
-                    let streamKey = streamObj.Id || streamObj.StreamKey;
-
-                    let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, meta.streamTags);
-
-                    if (streamTagsChanged) {
-                        addTagsToStream(streamKey, meta.streamTags);
-                        node.uploader.updateStreamTags(streamKey, meta.streamTags);
-                    }
-
-                    // create new log
-                    let log = new Log(poolObj.poolName, streamName, meta.poolTags, meta.streamTags, poolKey, streamKey, meta.valueObj);
-
-                    // add to cache 
-                    node.uploader.addToLogs(log);
-
-                } catch (error) {
-                }
-            } else {
-                //do nothing, stream already exists
-            }
-        }
-
         async function setUpPool(poolBody) {
             try {
-                const poolObj = await getPoolIfExists(poolBody);
-                //create pool if doesnt exist
-                if (poolObj === false) {
-                    const poolObj = await createPool(poolBody);
-                    return poolObj;
-                } else {
-                    node.uploader.addToPoolTags(poolBody, poolObj)
-                    return poolObj;
-                }
+                const poolObj = await createOrGetPool(poolBody);
+                node.uploader.addToPoolTags(poolBody, poolObj)
+                return poolObj;
             } catch (e) {
                 throw e;
             }
@@ -457,89 +401,19 @@ module.exports = function (RED) {
                 if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null &&
                     typeof streamName !== 'undefined' && streamName !== "" && streamName !== null
                 ) {
-                    const streamObj = await getStreamIfExists(poolKey, streamName);
-                    if (streamObj === false) {
-                        const streamObj = await createStream(poolObj, streamName, dataType);
-                        if (streamObj === false) {
-                            applyStatus({ fill: "red", shape: "dot", text: "Unable to create Stream. Check settings" });
-                            return;
-                        } else {
-                            return streamObj;
-                        }
-                    } else {
-                        node.uploader.addToStreamTags(streamObj);
-                        return streamObj;
-                    }
+                    const streamObj = await createOrGetStream(poolObj, streamName, dataType);
+                    node.uploader.addToStreamTags(streamObj);
+                    return streamObj;
                 }
             } catch (error) {
-                throw error;
-            }
-        }
-
-        async function getPoolIfExists(body) {
-            applyStatus({ fill: "blue", shape: "dot", text: "Getting Pool" });
-
-            try {
-                let uri = `${node.rootUrlv1}pools/web-search?public=${body.Public}&virtual=${body.Virtual}&includeHidden=false&organisationOnly=true&search=${body.Poolname}&orderBy=Name&desc=false&take=5&skip=0`;
-                const res = await fetch(uri, { method: 'GET', headers: headers, agent: agent });
-                if (res.status == 200) {
-                    const payload = await res.json();
-                    let foundPool = payload.Pools.find(poolObj => poolObj.Name == body.Poolname);
-                    if (foundPool) {
-                        applyStatus({ fill: "blue", shape: "dot", text: "Found Pool" });
-                        return foundPool;
-                    } else {
-                        applyStatus({ fill: "blue", shape: "dot", text: "No Pool found" });
-                        return false;
-                    }
-                } else {
-                    const text = await res.text();
-                    logOut("Unable to get pool, response: ", `${res.status}: ${text}`);
-                    applyStatus({ fill: "red", shape: "dot", text: "Error getting Pool. Code: " + res.status });
-                    return false;
-                }
-            } catch (e) {
-                logOut(e);
-            }
-        }
-
-        async function getStreamIfExists(poolKey, streamName) {
-            applyStatus({ fill: "blue", shape: "dot", text: "Getting Stream" });
-
-            try {
-                if (typeof streamName !== 'undefined' && streamName !== "" && streamName !== null) {
-                    let uri = `${node.rootUrlv1}pool/${poolKey}/streams/web-search?&search=${streamName}&orderBy=Name&desc=false&take=5&skip=0`;
-                    const res = await fetch(uri, { method: 'GET', headers: headers, agent: agent });
-                    if (res.status == 200) {
-                        const payload = await res.json();
-                        let foundStream = null;
-                        if (payload.Streams.length > 0) {
-                            foundStream = payload.Streams.find(x => x.Name == streamName);
-                        }
-                        if (foundStream !== null) {
-                            applyStatus({ fill: "blue", shape: "dot", text: "Found Stream" });
-                            return foundStream;
-                        } else {
-                            applyStatus({ fill: "blue", shape: "dot", text: "No Stream found" });
-                            return false;
-                        }
-                    } else {
-                        const text = await res.text();
-                        logOut("Unable to get stream, response: ", `${res.status}: ${text}`);
-                        applyStatus({ fill: "red", shape: "dot", text: "Error getting Stream. Code: " + res.status });
-                        return false;
-                    }
-                }
-            } catch (error) {
-                logOut("Unable to get stream: ", error);
-                applyStatus({ fill: "red", shape: "dot", text: "Error getting Stream" });
+                applyStatus({ fill: "red", shape: "dot", text: "Unable to create Stream. Check settings" });
                 throw error;
             }
         }
 
         //creates a new pool
-        async function createPool(body) {
-            applyStatus({ fill: "blue", shape: "dot", text: "Creating new Pool" });
+        async function createOrGetPool(body) {
+            applyStatus({ fill: "blue", shape: "dot", text: "Loading Pool" });
 
             try {
                 const res = await fetch(node.rootUrlv2 + "pools", { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(body) });
@@ -548,19 +422,19 @@ module.exports = function (RED) {
                     return payload;
                 } else {
                     const text = await res.text();
-                    logOut("Unable to create pool, response: ", `${res.status}: ${text}`);
-                    return false;
+                    logOut("Unable to load pool, response: ", `${res.status}: ${text}`);
+                    throw res;
                 }
             } catch (error) {
-                logOut("Unable to create pool: ", error);
-                applyStatus({ fill: "red", shape: "dot", text: "Error creating pool" });
+                logOut("Unable to load pool: ", error);
+                applyStatus({ fill: "red", shape: "dot", text: "Error loading pool" });
                 throw error;
             }
         }
 
         //creates a new station in provided pool
-        async function createStation(poolKey, pool) {
-            applyStatus({ fill: "blue", shape: "dot", text: "Creating new station" });
+        async function createOrGetStation(poolKey, pool) {
+            applyStatus({ fill: "blue", shape: "dot", text: "Loading station" });
 
             const stationName = pool.Name || pool.poolName || "1";
 
@@ -577,12 +451,12 @@ module.exports = function (RED) {
                     } else {
                         const text = await res.text();
                         logOut("Unable to create station, response: ", `${res.status}: ${text}`);
-                        applyStatus({ fill: "blue", shape: "dot", text: "Error creating station. Error: " + res.status });
+                        applyStatus({ fill: "blue", shape: "dot", text: "Error loading station. Error: " + res.status });
                         throw res;
                     }
                 } catch (error) {
-                    logOut("Unable to create station: ", error);
-                    applyStatus({ fill: "blue", shape: "dot", text: "Error creating station " });
+                    logOut("Unable to loading station: ", error);
+                    applyStatus({ fill: "blue", shape: "dot", text: "Error loading station " });
                     throw error;
                 }
             } else {
@@ -590,83 +464,39 @@ module.exports = function (RED) {
             }
         }
 
-        //get stations for pool
-        async function getStationIfExists(poolKey, pool) {
-            applyStatus({ fill: "blue", shape: "dot", text: "Getting Station for stream" });
-            try {
-                const stationCached = node.uploader.getStation(poolKey);
-                if (stationCached) {
-                    return stationCached;
-                }
-                const stationName = pool.Name || pool.poolName || "1";
-                const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations`, { method: 'GET', headers: headers, agent: agent });
-                if (res.status == 200) {
-                    const payload = await res.json();
-                    let foundStation = null;
-                    if (payload.length > 0) {
-                        foundStation = payload.find(x => x.StationName == stationName);
-                    }
-                    if (foundStation) {
-                        applyStatus({ fill: "blue", shape: "dot", text: "Found Station" });
-                        return foundStation;
-                    } else {
-                        return false;
-                    }
-                } else {
-                    const text = await res.text();
-                    logOut("Unable to get station, response: ", `${res.status}: ${text}`);
-                    applyStatus({ fill: "red", shape: "dot", text: "Error getting Station in pool. Error: " + res.status });
-                    return false;
-                }
-            } catch (error) {
-                throw error;
-            }
-        }
-
         //checks/creates station in pool, then creates stream for 1ST station. 
-        async function createStream(pool, streamName, dataType) {
-            let poolKey = pool.Id || pool.PoolKey;
+        async function createOrGetStream(pool, streamName, dataType) {
+            let poolKey = pool.PoolKey;
 
-            applyStatus({ fill: "blue", shape: "dot", text: "Creating new Stream" });
+            applyStatus({ fill: "blue", shape: "dot", text: "Loading Stream" });
 
             try {
                 if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null) {
-                    let station = await getStationIfExists(poolKey, pool);
+                    const station = await createOrGetStation(poolKey, pool);
+                    let streamBody = {
+                        "LocalIndex": streamName,
+                        "StreamName": streamName,
+                        "Description": streamName,
+                        "Public": public,
+                        "DataType": dataType
+                    };
+                    const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations/${station.StationID}/streams`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(streamBody) });
 
-                    if (station === false) {
-                        applyStatus({ fill: "blue", shape: "dot", text: "No station found" });
-                        station = await createStation(poolKey, pool);
-                    }
-
-                    if (station !== false) {
-                        let streamBody = {
-                            "LocalIndex": streamName,
-                            "StreamName": streamName,
-                            "Description": streamName,
-                            "Public": public,
-                            "DataType": dataType
-                        };
-                        const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations/${station.StationID}/streams`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(streamBody) });
-
-                        if (res.status == 200) {
-                            const payload = await res.json();
-                            resolve(payload);
-                        } else {
-                            const text = await res.text();
-                            logOut("Unable to create stream, response: ", `${res.status}: ${text}`);
-                            applyStatus({ fill: "red", shape: "dot", text: "Error creating Stream. Error: " + res.status });
-                            resolve(false);
-                        }
+                    if (res.status == 200) {
+                        const payload = await res.json();
+                        return payload;
                     } else {
-                        applyStatus({ fill: "red", shape: "dot", text: "Error getting Station " });
-                        resolve(false);
+                        const text = await res.text();
+                        logOut("Unable to load stream, response: ", `${res.status}: ${text}`);
+                        applyStatus({ fill: "red", shape: "dot", text: "Error loading Stream. Error: " + res.status });
+                        throw res;
                     }
 
                 }
             } catch (error) {
                 logOut(error);
-                applyStatus({ fill: "red", shape: "dot", text: "Error getting Station in pool" });
-                resolve(false);
+                applyStatus({ fill: "red", shape: "dot", text: "Error loading Stream" });
+                return falsey;
             }
         }
 
