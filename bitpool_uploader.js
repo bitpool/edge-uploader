@@ -4,46 +4,46 @@
 
 const { resolve } = require('path');
 
-module.exports = function(RED) {
+module.exports = function (RED) {
     const fetch = require('node-fetch');
     const https = require("https");
     const { Uploader } = require("./uploader")
     const { Log } = require("./log")
     const { ToadScheduler, SimpleIntervalJob, Task, AsyncTask } = require('toad-scheduler')
     const os = require("os");
-    const {Mutex, Semaphore, withTimeout} = require("async-mutex");
+    const { Mutex, Semaphore, withTimeout } = require("async-mutex");
 
     function BITPOOL(config) {
-        RED.nodes.createNode(this,config);
+        RED.nodes.createNode(this, config);
 
         let nodeContext = this.context().flow;
         let apiKeyConfig = RED.nodes.getNode(config.apiKey);
         let poolSettings = RED.nodes.getNode(config.pool_settings);
-        let api_key                  = apiKeyConfig.api_key;
-        let pool_name                = poolSettings.pool_name;
-        let stream_name              = config.stream_name;
-        let public                   = poolSettings.public;
-        let virtual                  = poolSettings.virtual;
-        let uploadCount              = config.uploadCount;
-        let uploadInterval           = config.uploadInterval;
+        let api_key = apiKeyConfig.api_key;
+        let pool_name = poolSettings.pool_name;
+        let stream_name = config.stream_name;
+        let public = poolSettings.public;
+        let virtual = poolSettings.virtual;
+        let uploadCount = config.uploadCount;
+        let uploadInterval = config.uploadInterval;
 
-        let bpChkShowDateOnLabel     = config.bpChkShowDateOnLabel;
-        let bpChkShowDebugWarnings   = config.bpChkShowDebugWarnings;
-        let rebuildOnError           = config.rebuildOnError;
+        let bpChkShowDateOnLabel = config.bpChkShowDateOnLabel;
+        let bpChkShowDebugWarnings = config.bpChkShowDebugWarnings;
+        let rebuildOnError = config.rebuildOnError;
 
-        let node                     = this;
-        let toLog                    = false;
-        let isDev                    = false;
+        let node = this;
+        let toLog = false;
+        let isDev = false;
 
-        this.rootUrlv1               = isDev ? "https://dev.api.bitpool.com/rest/BitPool_V1/" : "https://api.bitpool.com/rest/BitPool_V1/";
-        this.rootUrlv2               = isDev ? "https://dev.api.bitpool.com/public/v2/" : "https://api.bitpool.com/public/v2/";
-        this.rootUrlv3               = isDev ? "https://dev.api.bitpool.com/public/v3/" : "https://api.bitpool.com/public/v3/";
-        this.isrequesting            = false;
-        this.processQueue            = [];
-        this.uploading               = false;
-        this.scheduler               = new ToadScheduler();
-        this.mutex                   = new Mutex();
-        this.PoolTags                = config.PoolTags;
+        this.rootUrlv1 = isDev ? "https://dev.api.bitpool.com/rest/BitPool_V1/" : "https://api.bitpool.com/rest/BitPool_V1/";
+        this.rootUrlv2 = isDev ? "https://dev.api.bitpool.com/public/v2/" : "https://api.bitpool.com/public/v2/";
+        this.rootUrlv3 = isDev ? "https://dev.api.bitpool.com/public/v3/" : "https://api.bitpool.com/public/v3/";
+        this.isrequesting = false;
+        this.processQueue = [];
+        this.uploading = false;
+        this.scheduler = new ToadScheduler();
+        this.mutex = new Mutex();
+        this.PoolTags = config.PoolTags;
 
         this.uploader = nodeContext.get("uploader") || new Uploader();
 
@@ -53,11 +53,11 @@ module.exports = function(RED) {
 
         let headers = {
             'Authorization': api_key,
-            'Content-Type' : "application/json"
+            'Content-Type': "application/json"
         };
 
         //schedule rebuild task
-        const task = new Task('simple task', () => { 
+        const task = new Task('simple task', () => {
             reInitialiseUploader();
         });
 
@@ -68,20 +68,20 @@ module.exports = function(RED) {
 
         //schedule checkState task
         const checkStateTask = new AsyncTask('simple task',
-            () => { 
+            () => {
                 // https://www.npmjs.com/package/toad-scheduler
                 // Usage with async tasks
                 // Note that in order to avoid memory leaks, it is recommended to use promise chains instead of async/await inside task definition. 
-                checkState().then((result) => { /* nothing */ }) 
-            }, 
+                checkState().then((result) => { /* nothing */ })
+            },
             (err) => { /* ignore */ }
         );
 
         //schedule checkState
         const checkStateJob = new SimpleIntervalJob(
-            { seconds: 1, }, 
+            { seconds: 1, },
             checkStateTask,
-            { 
+            {
                 id: 'checkState',
                 preventOverrun: true // prevent second instance of a task from being fired up while first one is still executing
             }
@@ -89,20 +89,20 @@ module.exports = function(RED) {
         this.scheduler.addSimpleIntervalJob(checkStateJob);
 
         //Main function that occurs on node input
-        node.on('input', function(msg, send, done) {
-            if(msg.BPCommand == "REBUILD") {
+        node.on('input', function (msg, send, done) {
+            if (msg.BPCommand == "REBUILD") {
                 //triggers object rebuild. 
                 reInitialiseUploader();
             } else {
-                if(node.PoolTags) msg.PoolTags = node.PoolTags;
-                
+                if (node.PoolTags) msg.PoolTags = node.PoolTags;
+
                 //get tags from msg object
                 let streamTags = msg.meta ? msg.meta : null;
                 let poolTags = msg.PoolTags ? msg.PoolTags : null;
 
                 //format tags 
-                if(streamTags && streamTags !== "") {
-                    if(streamTags.includes(",")){
+                if (streamTags && streamTags !== "") {
+                    if (streamTags.includes(",")) {
                         streamTags = streamTags.split(", ");
                     } else {
                         streamTags = [streamTags]
@@ -111,8 +111,8 @@ module.exports = function(RED) {
                 }
 
                 //format tags
-                if(poolTags && poolTags !== "") {
-                    if(poolTags.includes(",")) {
+                if (poolTags && poolTags !== "") {
+                    if (poolTags.includes(",")) {
                         poolTags = poolTags.split(", ");
                     } else {
                         poolTags = [poolTags];
@@ -125,7 +125,7 @@ module.exports = function(RED) {
                 poolTags = removeNameSpacePrefix(poolTags);
 
                 //set pending status
-                applyStatus({fill:"blue",shape:"dot",text:"Processing " + new Date().toLocaleString()});
+                applyStatus({ fill: "blue", shape: "dot", text: "Processing " + new Date().toLocaleString() });
 
                 let poolBody = {
                     "Poolname": "",
@@ -135,7 +135,7 @@ module.exports = function(RED) {
 
                 //set pool name, from msg.pool or uploader setting
                 let poolName;
-                if(msg.pool && msg.pool !== "") {
+                if (msg.pool && msg.pool !== "") {
                     poolBody.Poolname = msg.pool;
                     poolName = msg.pool;
                 } else {
@@ -145,9 +145,9 @@ module.exports = function(RED) {
 
                 //set stream name, from msg.topic or uploader setting
                 let streamName;
-                if(msg.topic && msg.topic !== "") {
+                if (msg.topic && msg.topic !== "") {
                     streamName = msg.topic
-                } else if(msg.stream && msg.stream !== "") {
+                } else if (msg.stream && msg.stream !== "") {
                     streamName = msg.stream;
                 } else {
                     streamName = stream_name;
@@ -155,21 +155,21 @@ module.exports = function(RED) {
 
                 //get msg.payload data type
                 let dataType = getDataType(msg.payload);
-                
+
                 const now = new Date();
 
                 //object to be used in bulk upload
                 let valueObj;
 
                 //Support for different data types
-                if(dataType === "Double") {
+                if (dataType === "Double") {
                     valueObj = {
                         "Ts": now.toISOString(),
                         "Val": msg.payload,
                         "ValStr": null,
                         "Calculated": false
                     };
-                } else if(dataType === "String") {
+                } else if (dataType === "String") {
                     valueObj = {
                         "Ts": now.toISOString(),
                         "Val": null,
@@ -180,12 +180,12 @@ module.exports = function(RED) {
 
                 try {
                     //only build structure if valueObj has been assigned - String and Double types only
-                    if(valueObj && poolName && streamName) {
+                    if (valueObj && poolName && streamName) {
                         this.uploader.addToQueue(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType);
                     }
-                } catch(e) {
+                } catch (e) {
                     logOut(e);
-                    applyStatus({fill:"red",shape:"dot",text:"Unable to set up pools or streams"});
+                    applyStatus({ fill: "red", shape: "dot", text: "Unable to set up pools or streams" });
                 }
             }
             // Once finished, call 'done'.
@@ -196,7 +196,7 @@ module.exports = function(RED) {
             }
         });
 
-        node.on('close', function() {
+        node.on('close', function () {
             nodeContext.set("uploader", this.uploader);
 
             //remove jobs on deploy to avoid memory leaks
@@ -215,37 +215,37 @@ module.exports = function(RED) {
                             await buildStructure(item.poolBody, item.poolName, item.streamName, item.poolTags, item.streamTags, item.valueObj, item.dataType);
                         } catch (e) {
                             logOut(e);
-                            applyStatus({fill:"red",shape:"dot",text:"Unable to set up pools or streams"});
+                            applyStatus({ fill: "red", shape: "dot", text: "Unable to set up pools or streams" });
                         }
                     }
                 }
 
                 let timeDiff = (Math.floor(Date.now() / 1000) - node.uploader.getUploadTs());
-                
+
                 let count = node.uploader.getLogCount();
 
-                if(count >= uploadCount || timeDiff >= uploadInterval && node.uploading == false) {
+                if (count >= uploadCount || timeDiff >= uploadInterval && node.uploading == false) {
                     //Wait for uploadCount setting to be met, OR, uploadInterval time to pass
 
                     node.uploading = true;
 
                     let uploadData = node.uploader.getBulkUploadData();
 
-                    if(uploadData.length > 0) {
+                    if (uploadData.length > 0) {
                         try {
                             let uploadResult = await pushBulkUploadData(uploadData);
-                            if(uploadResult !== false) {
-                                applyStatus({fill:"green",shape:"dot",text: new Date().toLocaleString()});
-                                node.uploader.clearUploadedValues(count);                                
+                            if (uploadResult !== false) {
+                                applyStatus({ fill: "green", shape: "dot", text: new Date().toLocaleString() });
+                                node.uploader.clearUploadedValues(count);
                             } else {
-                                applyStatus({fill:"red",shape:"dot",text:"Unable to push to Bitpool "});
-                                if(rebuildOnError) {
+                                applyStatus({ fill: "red", shape: "dot", text: "Unable to push to Bitpool " });
+                                if (rebuildOnError) {
                                     await reInitialiseUploader();
                                 }
                             }
-                        } catch(e) {
-                            applyStatus({fill:"red",shape:"dot",text:"Unable to push to Bitpool "});
-                            if(rebuildOnError) {
+                        } catch (e) {
+                            applyStatus({ fill: "red", shape: "dot", text: "Unable to push to Bitpool " });
+                            if (rebuildOnError) {
                                 await reInitialiseUploader();
                             }
                         } finally {
@@ -256,7 +256,7 @@ module.exports = function(RED) {
                     }
                 } else {
                     //set pending status
-                    applyStatus({fill:"blue",shape:"dot",text: count + " Logs Cached"});
+                    applyStatus({ fill: "blue", shape: "dot", text: count + " Logs Cached" });
                 }
             } finally {
                 release();
@@ -278,13 +278,13 @@ module.exports = function(RED) {
 
             applyStatus({});
         }
-        
+
         async function buildStructure(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType) {
             try {
                 //check if log exists in cache
                 let logExists = node.uploader.getLog(poolName, streamName) === undefined ? false : true;
-                
-                if(!logExists) {
+
+                if (!logExists) {
 
                     // Log doesnt exist in cache, handle the creation of new log. 
                     // Check api for pool, create a new pool if not found
@@ -296,23 +296,23 @@ module.exports = function(RED) {
                     let poolKey;
                     let streamObj;
 
-                    if(!poolExists) {
+                    if (!poolExists) {
                         poolObj = await setUpPool(poolBody);
 
                         //set poolKey, based on 2 potential objects
                         poolKey = poolObj.Id || poolObj.PoolKey;
 
-                        node.uploader.addPool({poolName: poolName, PoolKey: poolKey});
+                        node.uploader.addPool({ poolName: poolName, PoolKey: poolKey });
 
                         let poolTagsChanged = node.uploader.getPoolTagsChanged(poolKey, poolTags);
 
-                        if(poolTagsChanged) {
+                        if (poolTagsChanged) {
                             await addTagsToPool(poolKey, poolTags);
                             node.uploader.updatePoolTags(poolKey, poolTags);
                         }
 
                         // add pool to cache
-                        node.uploader.addPool({poolName: poolName, PoolKey: poolKey});
+                        node.uploader.addPool({ poolName: poolName, PoolKey: poolKey });
 
                         streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
 
@@ -321,11 +321,11 @@ module.exports = function(RED) {
 
                         let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, streamTags);
 
-                        if(streamTagsChanged){
+                        if (streamTagsChanged) {
                             await addTagsToStream(streamKey, streamTags);
                             node.uploader.updateStreamTags(streamKey, streamTags);
                         }
-                        
+
                         // create new log
                         let log = new Log(poolName, streamName, poolTags, streamTags, poolKey, streamKey, valueObj);
 
@@ -333,11 +333,11 @@ module.exports = function(RED) {
                         node.uploader.addToLogs(log);
                         return log;
                     } else {
-                        
+
                         poolObj = node.uploader.getPool(poolName);
                         poolKey = poolObj.PoolKey;
 
-                        if(poolKey !== null){
+                        if (poolKey !== null) {
                             streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
 
 
@@ -346,7 +346,7 @@ module.exports = function(RED) {
 
                             let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, streamTags);
 
-                            if(streamTagsChanged){
+                            if (streamTagsChanged) {
                                 await addTagsToStream(streamKey, streamTags);
                                 node.uploader.updateStreamTags(streamKey, streamTags);
                             }
@@ -360,8 +360,8 @@ module.exports = function(RED) {
                             return log;
                         } else {
                             let metaDataObj = {
-                                poolName: poolName, 
-                                streamName: streamName, 
+                                poolName: poolName,
+                                streamName: streamName,
                                 dataType: dataType,
                                 poolTags: poolTags,
                                 streamTags: streamTags,
@@ -373,7 +373,7 @@ module.exports = function(RED) {
 
                 } else {
                     // Log exists in cache, update with new value object
-                
+
                     let foundLog = node.uploader.getLog(poolName, streamName);
 
                     node.uploader.updateLog(foundLog, valueObj);
@@ -381,7 +381,7 @@ module.exports = function(RED) {
                     let poolTagsChanged = node.uploader.getPoolTagsChanged(foundLog.poolkey, poolTags);
 
                     //update pool tags if changed
-                    if(poolTagsChanged) {
+                    if (poolTagsChanged) {
                         await addTagsToPool(foundLog.poolkey, poolTags);
                         node.uploader.updatePoolTags(foundLog.poolkey, poolTags);
                     }
@@ -389,7 +389,7 @@ module.exports = function(RED) {
                     let streamTagsChanged = node.uploader.getStreamTagsChanged(foundLog.streamKey, streamTags);
 
                     //update stream tags if changed
-                    if(streamTagsChanged){
+                    if (streamTagsChanged) {
                         await addTagsToStream(foundLog.streamKey, streamTags);
                         node.uploader.updateStreamTags(foundLog.streamKey, streamTags);
                     }
@@ -409,7 +409,7 @@ module.exports = function(RED) {
 
             let logExists = log === undefined ? false : true;
 
-            if(!logExists) {
+            if (!logExists) {
                 try {
                     const streamObj = await setupStreams(poolObj, poolKey, streamName, dataType);
 
@@ -418,7 +418,7 @@ module.exports = function(RED) {
 
                     let streamTagsChanged = node.uploader.getStreamTagsChanged(streamKey, meta.streamTags);
 
-                    if(streamTagsChanged){
+                    if (streamTagsChanged) {
                         addTagsToStream(streamKey, meta.streamTags);
                         node.uploader.updateStreamTags(streamKey, meta.streamTags);
                     }
@@ -440,13 +440,13 @@ module.exports = function(RED) {
             try {
                 const poolObj = await getPoolIfExists(poolBody);
                 //create pool if doesnt exist
-                if(poolObj === false) {
+                if (poolObj === false) {
                     const poolObj = await createPool(poolBody);
                     return poolObj;
                 } else {
                     node.uploader.addToPoolTags(poolBody, poolObj)
                     return poolObj;
-                } 
+                }
             } catch (e) {
                 throw e;
             }
@@ -454,14 +454,14 @@ module.exports = function(RED) {
 
         async function setupStreams(poolObj, poolKey, streamName, dataType) {
             try {
-                if(typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null &&
-                   typeof streamName !== 'undefined' && streamName !== "" && streamName !== null
+                if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null &&
+                    typeof streamName !== 'undefined' && streamName !== "" && streamName !== null
                 ) {
                     const streamObj = await getStreamIfExists(poolKey, streamName);
-                    if(streamObj === false) {
+                    if (streamObj === false) {
                         const streamObj = await createStream(poolObj, streamName, dataType);
-                        if(streamObj === false) {
-                            applyStatus({fill:"red",shape:"dot",text:"Unable to create Stream. Check settings"});
+                        if (streamObj === false) {
+                            applyStatus({ fill: "red", shape: "dot", text: "Unable to create Stream. Check settings" });
                             return;
                         } else {
                             return streamObj;
@@ -477,25 +477,25 @@ module.exports = function(RED) {
         }
 
         async function getPoolIfExists(body) {
-            applyStatus({fill:"blue",shape:"dot",text:"Getting Pool"});
+            applyStatus({ fill: "blue", shape: "dot", text: "Getting Pool" });
 
             try {
                 let uri = `${node.rootUrlv1}pools/web-search?public=${body.Public}&virtual=${body.Virtual}&includeHidden=false&organisationOnly=true&search=${body.Poolname}&orderBy=Name&desc=false&take=5&skip=0`;
-                const res = await fetch(uri, {method: 'GET', headers: headers, agent: agent});
-                if(res.status == 200){
+                const res = await fetch(uri, { method: 'GET', headers: headers, agent: agent });
+                if (res.status == 200) {
                     const payload = await res.json();
                     let foundPool = payload.Pools.find(poolObj => poolObj.Name == body.Poolname);
-                    if(foundPool) {
-                        applyStatus({fill:"blue",shape:"dot",text:"Found Pool"});
+                    if (foundPool) {
+                        applyStatus({ fill: "blue", shape: "dot", text: "Found Pool" });
                         return foundPool;
                     } else {
-                        applyStatus({fill:"blue",shape:"dot",text:"No Pool found"});
+                        applyStatus({ fill: "blue", shape: "dot", text: "No Pool found" });
                         return false;
                     }
                 } else {
                     const text = await res.text();
                     logOut("Unable to get pool, response: ", `${res.status}: ${text}`);
-                    applyStatus({fill:"red",shape:"dot",text:"Error getting Pool. Code: " + res.status});
+                    applyStatus({ fill: "red", shape: "dot", text: "Error getting Pool. Code: " + res.status });
                     return false;
                 }
             } catch (e) {
@@ -504,46 +504,46 @@ module.exports = function(RED) {
         }
 
         async function getStreamIfExists(poolKey, streamName) {
-            applyStatus({fill:"blue",shape:"dot",text:"Getting Stream"});
+            applyStatus({ fill: "blue", shape: "dot", text: "Getting Stream" });
 
             try {
                 if (typeof streamName !== 'undefined' && streamName !== "" && streamName !== null) {
                     let uri = `${node.rootUrlv1}pool/${poolKey}/streams/web-search?&search=${streamName}&orderBy=Name&desc=false&take=5&skip=0`;
-                    const res = await fetch(uri, {method: 'GET', headers: headers, agent: agent});
-                    if(res.status == 200) {
+                    const res = await fetch(uri, { method: 'GET', headers: headers, agent: agent });
+                    if (res.status == 200) {
                         const payload = await res.json();
                         let foundStream = null;
-                        if(payload.Streams.length > 0) {
+                        if (payload.Streams.length > 0) {
                             foundStream = payload.Streams.find(x => x.Name == streamName);
                         }
-                        if(foundStream !== null) {
-                            applyStatus({fill:"blue",shape:"dot",text:"Found Stream"});
+                        if (foundStream !== null) {
+                            applyStatus({ fill: "blue", shape: "dot", text: "Found Stream" });
                             return foundStream;
                         } else {
-                            applyStatus({fill:"blue",shape:"dot",text:"No Stream found"});
+                            applyStatus({ fill: "blue", shape: "dot", text: "No Stream found" });
                             return false;
                         }
                     } else {
                         const text = await res.text();
                         logOut("Unable to get stream, response: ", `${res.status}: ${text}`);
-                        applyStatus({fill:"red",shape:"dot",text:"Error getting Stream. Code: " + res.status});
+                        applyStatus({ fill: "red", shape: "dot", text: "Error getting Stream. Code: " + res.status });
                         return false;
                     }
                 }
-            } catch(error) {
+            } catch (error) {
                 logOut("Unable to get stream: ", error);
-                applyStatus({fill:"red",shape:"dot",text:"Error getting Stream"});
+                applyStatus({ fill: "red", shape: "dot", text: "Error getting Stream" });
                 throw error;
             }
         }
 
         //creates a new pool
         async function createPool(body) {
-            applyStatus({fill:"blue",shape:"dot",text:"Creating new Pool"});
+            applyStatus({ fill: "blue", shape: "dot", text: "Creating new Pool" });
 
             try {
-                const res = await fetch(node.rootUrlv2 + "pools", {method: 'POST', headers: headers, agent: agent, body: JSON.stringify(body)});
-                if(res.status == 200) {
+                const res = await fetch(node.rootUrlv2 + "pools", { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(body) });
+                if (res.status == 200) {
                     const payload = await res.json();
                     return payload;
                 } else {
@@ -551,38 +551,38 @@ module.exports = function(RED) {
                     logOut("Unable to create pool, response: ", `${res.status}: ${text}`);
                     return false;
                 }
-            } catch(error) {
+            } catch (error) {
                 logOut("Unable to create pool: ", error);
-                applyStatus({fill:"red",shape:"dot",text:"Error creating pool"});
+                applyStatus({ fill: "red", shape: "dot", text: "Error creating pool" });
                 throw error;
             }
         }
 
         //creates a new station in provided pool
         async function createStation(poolKey, pool) {
-            applyStatus({fill:"blue",shape:"dot",text:"Creating new station"});
+            applyStatus({ fill: "blue", shape: "dot", text: "Creating new station" });
 
             const stationName = pool.Name || pool.poolName || "1";
 
             const stationExists = node.uploader.getStation(poolKey);
 
-            if(!stationExists) {
+            if (!stationExists) {
                 try {
-                    const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations`, {method: 'POST', headers: headers, agent: agent, body: JSON.stringify(stationName)});
-                    if(res.status == 200){
+                    const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(stationName) });
+                    if (res.status == 200) {
                         const payload = await res.json();
-                        const result = {poolKey: poolKey, StationID: payload.StationID};
+                        const result = { poolKey: poolKey, StationID: payload.StationID };
                         node.uploader.addStation(result);
                         return result;
                     } else {
                         const text = await res.text();
                         logOut("Unable to create station, response: ", `${res.status}: ${text}`);
-                        applyStatus({fill:"blue",shape:"dot",text:"Error creating station. Error: " + res.status});
+                        applyStatus({ fill: "blue", shape: "dot", text: "Error creating station. Error: " + res.status });
                         throw res;
                     }
-                } catch(error) {
+                } catch (error) {
                     logOut("Unable to create station: ", error);
-                    applyStatus({fill:"blue",shape:"dot",text:"Error creating station "});
+                    applyStatus({ fill: "blue", shape: "dot", text: "Error creating station " });
                     throw error;
                 }
             } else {
@@ -592,22 +592,22 @@ module.exports = function(RED) {
 
         //get stations for pool
         async function getStationIfExists(poolKey, pool) {
-            applyStatus({fill:"blue",shape:"dot",text:"Getting Station for stream"});
+            applyStatus({ fill: "blue", shape: "dot", text: "Getting Station for stream" });
             try {
                 const stationCached = node.uploader.getStation(poolKey);
                 if (stationCached) {
                     return stationCached;
                 }
                 const stationName = pool.Name || pool.poolName || "1";
-                const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations`, {method: 'GET', headers: headers, agent: agent});
-                if(res.status == 200){
+                const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations`, { method: 'GET', headers: headers, agent: agent });
+                if (res.status == 200) {
                     const payload = await res.json();
                     let foundStation = null;
-                    if(payload.length > 0) {
+                    if (payload.length > 0) {
                         foundStation = payload.find(x => x.StationName == stationName);
                     }
-                    if(foundStation) {
-                        applyStatus({fill:"blue",shape:"dot",text:"Found Station"});
+                    if (foundStation) {
+                        applyStatus({ fill: "blue", shape: "dot", text: "Found Station" });
                         return foundStation;
                     } else {
                         return false;
@@ -615,10 +615,10 @@ module.exports = function(RED) {
                 } else {
                     const text = await res.text();
                     logOut("Unable to get station, response: ", `${res.status}: ${text}`);
-                    applyStatus({fill:"red",shape:"dot",text:"Error getting Station in pool. Error: " + res.status});
+                    applyStatus({ fill: "red", shape: "dot", text: "Error getting Station in pool. Error: " + res.status });
                     return false;
                 }
-            } catch(error) {
+            } catch (error) {
                 throw error;
             }
         }
@@ -627,18 +627,18 @@ module.exports = function(RED) {
         async function createStream(pool, streamName, dataType) {
             let poolKey = pool.Id || pool.PoolKey;
 
-            applyStatus({fill:"blue",shape:"dot",text:"Creating new Stream"});
+            applyStatus({ fill: "blue", shape: "dot", text: "Creating new Stream" });
 
             try {
                 if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null) {
                     let station = await getStationIfExists(poolKey, pool);
 
-                    if(station === false) {
-                        applyStatus({fill:"blue",shape:"dot",text:"No station found"});
+                    if (station === false) {
+                        applyStatus({ fill: "blue", shape: "dot", text: "No station found" });
                         station = await createStation(poolKey, pool);
                     }
 
-                    if(station !== false) {
+                    if (station !== false) {
                         let streamBody = {
                             "LocalIndex": streamName,
                             "StreamName": streamName,
@@ -646,37 +646,37 @@ module.exports = function(RED) {
                             "Public": public,
                             "DataType": dataType
                         };
-                        const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations/${station.StationID}/streams`, {method: 'POST', headers: headers, agent: agent, body: JSON.stringify(streamBody)});
+                        const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations/${station.StationID}/streams`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(streamBody) });
 
-                        if(res.status == 200) {
+                        if (res.status == 200) {
                             const payload = await res.json();
                             resolve(payload);
                         } else {
                             const text = await res.text();
                             logOut("Unable to create stream, response: ", `${res.status}: ${text}`);
-                            applyStatus({fill:"red",shape:"dot",text:"Error creating Stream. Error: " + res.status});
+                            applyStatus({ fill: "red", shape: "dot", text: "Error creating Stream. Error: " + res.status });
                             resolve(false);
                         }
                     } else {
-                        applyStatus({fill:"red",shape:"dot",text:"Error getting Station "});
+                        applyStatus({ fill: "red", shape: "dot", text: "Error getting Station " });
                         resolve(false);
                     }
 
                 }
-            } catch(error) {
+            } catch (error) {
                 logOut(error);
-                applyStatus({fill:"red",shape:"dot",text:"Error getting Station in pool"});
+                applyStatus({ fill: "red", shape: "dot", text: "Error getting Station in pool" });
                 resolve(false);
             }
         }
 
         //uploads bulk data to cloud
         async function pushBulkUploadData(uploadData) {
-            applyStatus({fill:"blue",shape:"dot",text:"Pushing to Bitpool"});
+            applyStatus({ fill: "blue", shape: "dot", text: "Pushing to Bitpool" });
             let body = JSON.stringify(uploadData);
             try {
-                const res = await fetch(node.rootUrlv2 + "streams/logs", {method: 'POST', headers: headers, agent: agent, body: body});
-                if(res.status == 200) {
+                const res = await fetch(node.rootUrlv2 + "streams/logs", { method: 'POST', headers: headers, agent: agent, body: body });
+                if (res.status == 200) {
                     return true;
                 } else {
                     const text = await res.text();
@@ -691,14 +691,14 @@ module.exports = function(RED) {
 
         function addTagsToStream(streamKey, tags) {
             //push tags to stream
-            if(tags && tags !== "" && tags.length > 0 && streamKey){
+            if (tags && tags !== "" && tags.length > 0 && streamKey) {
                 let newTagResult = pushNewTagsToStream(streamKey, tags);
             }
         }
 
         function addTagsToPool(poolKey, tags) {
             //push tags to pool
-            if(tags && tags !== "" && tags.length > 0 && poolKey) {
+            if (tags && tags !== "" && tags.length > 0 && poolKey) {
                 let newTagResult = pushNewTagsToPool(poolKey, tags);
             }
         }
@@ -706,14 +706,14 @@ module.exports = function(RED) {
         //Inserts specified tags to current stream
         async function pushNewTagsToStream(streamKey, tags) {
             try {
-                applyStatus({fill:"blue",shape:"dot",text:"Pushing tags to stream"});
+                applyStatus({ fill: "blue", shape: "dot", text: "Pushing tags to stream" });
                 if (typeof streamKey !== 'undefined' && streamKey !== "" && streamKey !== null && tags) {
-                    const res = await fetch(node.rootUrlv3 + `stream/${streamKey}/tags`, {method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags)});
+                    const res = await fetch(node.rootUrlv3 + `stream/${streamKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
                     //returns true if sucessfully added tags
-                    if(res.status == 204 || res.status == 200) {
+                    if (res.status == 204 || res.status == 200) {
                         resolve(true);
                     } else {
-                        applyStatus({fill:"red",shape:"dot",text:"Error pushing tags to stream. Error: " + res.status});
+                        applyStatus({ fill: "red", shape: "dot", text: "Error pushing tags to stream. Error: " + res.status });
                         resolve(false);
                     }
                 }
@@ -725,14 +725,14 @@ module.exports = function(RED) {
         //Inserts specified tags to current pool
         async function pushNewTagsToPool(poolKey, tags) {
             try {
-                applyStatus({fill:"blue",shape:"dot",text:"Pushing tags to pool"});
+                applyStatus({ fill: "blue", shape: "dot", text: "Pushing tags to pool" });
                 if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null && tags) {
-                    const res = await fetch(node.rootUrlv3 + `pool/${poolKey}/tags`, {method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags)});
+                    const res = await fetch(node.rootUrlv3 + `pool/${poolKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
                     //returns true if sucessfully added tags
-                    if(res.status == 204 || res.status == 200) {
+                    if (res.status == 204 || res.status == 200) {
                         resolve(true);
                     } else {
-                        applyStatus({fill:"red",shape:"dot",text:"Error pushing tags to pool. Error: " + res.status});
+                        applyStatus({ fill: "red", shape: "dot", text: "Error pushing tags to pool. Error: " + res.status });
                         resolve(false);
                     }
                 }
@@ -743,29 +743,29 @@ module.exports = function(RED) {
 
         //Returns msg.payload data type - either Double or String as per bitpool api - 
         function getDataType(value) {
-            let toType = function(obj) {
+            let toType = function (obj) {
                 return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase()
             };
             let type = toType(value);
-            if(value.constructor === ({}).constructor) {
+            if (value.constructor === ({}).constructor) {
                 return "JSONObject"
-            } else if(isJsonString(value) == true){
+            } else if (isJsonString(value) == true) {
                 return "JSONObject"
-            } else if(value == 0 && typeof value == "number") {
+            } else if (value == 0 && typeof value == "number") {
                 return "Double"
-            } else if(value == "") {
+            } else if (value == "") {
                 return "Empty"
-            } else if(value == null || value == undefined || value == 'undefined') {
+            } else if (value == null || value == undefined || value == 'undefined') {
                 return "Null"
             } else {
-                switch(type) {
+                switch (type) {
                     case "boolean":
                         return "String"
                         break;
                     case "number":
                         return "Double"
                         break;
-                    case "string": 
+                    case "string":
                         return "String";
                         break;
                 }
@@ -773,8 +773,8 @@ module.exports = function(RED) {
         }
 
         function removeNameSpacePrefix(tags) {
-            for(let index = 0; index < tags.length; index++) {
-                if(tags[index].includes(":")) {                    
+            for (let index = 0; index < tags.length; index++) {
+                if (tags[index].includes(":")) {
                     const splitTag = tags[index].split(":")
                     tags[index] = splitTag[1];
                 }
@@ -786,7 +786,7 @@ module.exports = function(RED) {
             try {
                 let obj = JSON.parse(strData);
                 let keys = Object.keys(obj);
-                if(keys.length > 0){
+                if (keys.length > 0) {
                     return true;
                 } else {
                     return false;
@@ -797,17 +797,17 @@ module.exports = function(RED) {
         }
 
         function applyStatus(jsonProps) {
-            if(bpChkShowDateOnLabel) {
+            if (bpChkShowDateOnLabel) {
                 node.status(jsonProps)
             }
         }
 
         function logOut(param1, param2) {
-            if(bpChkShowDebugWarnings) {
-                if(param1) node.warn(param1);
-                if(param2) node.warn(JSON.stringify(param2));
+            if (bpChkShowDebugWarnings) {
+                if (param1) node.warn(param1);
+                if (param2) node.warn(JSON.stringify(param2));
             }
         }
     };
-    RED.nodes.registerType('uploader',BITPOOL);
+    RED.nodes.registerType('uploader', BITPOOL);
 }
