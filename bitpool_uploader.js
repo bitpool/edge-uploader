@@ -496,7 +496,7 @@ module.exports = function (RED) {
             } catch (error) {
                 logOut(error);
                 applyStatus({ fill: "red", shape: "dot", text: "Error loading Stream" });
-                return falsey;
+                return false;
             }
         }
 
