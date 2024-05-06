@@ -11,11 +11,7 @@ class Uploader {
 
         this.pools = [];
 
-        this.streamQ = [];
-
         this.stations = [];
-
-        this.stationQ = [];
 
         this.poolTags = [];
 
@@ -24,6 +20,19 @@ class Uploader {
         this.streamDataCount = 0;
 
         this.uploadTs = Math.floor(+ new Date() / 1000);
+
+        // poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType
+        this.queue = [];
+
+        this.addToQueue = function(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType) {
+            this.queue.push({poolBody: poolBody, poolName: poolName, streamName: streamName, poolTags: poolTags, streamTags: streamTags, valueObj: valueObj, dataType: dataType});
+        }
+
+        this.getQueueAndClean = function() {
+            const result = this.queue.shift();
+            this.queue = [];
+            return result;
+        }
 
         this.getPoolTagsChanged = function(poolKey, tags) {
 
@@ -122,51 +131,12 @@ class Uploader {
             }
         }
 
-        this.clearStationQueue = function(poolKey){
-            let that = this;
-            that.stationQ.forEach(function(item, index){
-                if(item.poolKey === poolKey) {
-                    item.cb()
-                }
-            });
-        }
-
-        this.addToStationQueue = function(poolKey, station, streamBody, cb) {
-            this.stationQ.push({poolKey: poolKey, station: station, streamBody: streamBody, cb: cb})
-        }
-
-        this.updateStationId = function(poolKey, stationId) {
-            let stationIndex = this.stations.findIndex(ele => ele.poolKey === poolKey);
-            if(stationIndex !== -1){
-                this.stations[stationIndex].StationID = stationId;
-                this.clearStationQueue(poolKey);
-            } 
-        }
-
         this.addStation = function(station) {
             this.stations.push(station);
         }
 
         this.getStation = function(poolKey) {
             return this.stations.find(station => station.poolKey === poolKey);
-        }
-
-        this.addToStreamQueue = function(item) {
-            let streamExists = this.streamQ.findIndex(ele => ele.poolName === item.poolName && ele.streamName === item.streamName);
-            if(streamExists === -1){
-                //add to queue if its not already present in queue
-                this.streamQ.push(item);
-            }
-        }
-
-        this.clearStreamQueue = function(poolName, poolKey) {
-            let that = this;
-            this.streamQ.forEach(function(item, index) {
-                if(item.poolName == poolName){
-                    let pool = that.getPool(poolName);
-                    item.cb(pool, poolKey, item);
-                }
-            });
         }
 
         this.getLogs = function() {
@@ -184,18 +154,6 @@ class Uploader {
 
         this.addPool = function(poolObject) {
             this.pools.push(poolObject);
-        }
-
-        this.updatePoolKey = function(poolName, poolKey) {
-            let poolIndex = this.pools.findIndex(ele => ele.poolName === poolName);
-            this.pools[poolIndex].PoolKey = poolKey;
-
-            this.clearStreamQueue(poolName, poolKey);
-        }
-
-        this.updatePool = function(pool) {
-            let poolIndex = this.pools.findIndex(ele => ele.poolName === pool.poolName);
-            this.pools[poolIndex] = pool;
         }
 
         this.addToLogs = function(log) {
