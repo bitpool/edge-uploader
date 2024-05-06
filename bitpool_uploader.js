@@ -62,7 +62,13 @@ module.exports = function (RED) {
         });
 
         //schedule rebuild every 15 mins
-        const job = new SimpleIntervalJob({ seconds: 1200, }, task, 'reInitialiseUploader')
+        const job = new SimpleIntervalJob(
+            { seconds: 1200, }, 
+            task, 
+            {
+                id: 'reInitialiseUploader'
+            }
+        );
         this.scheduler.addSimpleIntervalJob(job);
 
 
@@ -72,7 +78,7 @@ module.exports = function (RED) {
                 // https://www.npmjs.com/package/toad-scheduler
                 // Usage with async tasks
                 // Note that in order to avoid memory leaks, it is recommended to use promise chains instead of async/await inside task definition. 
-                checkState().then((result) => { /* nothing */ })
+                return checkState().then((result) => { /* nothing */ })
             },
             (err) => { /* ignore */ }
         );
@@ -182,6 +188,7 @@ module.exports = function (RED) {
                     //only build structure if valueObj has been assigned - String and Double types only
                     if (valueObj && poolName && streamName) {
                         this.uploader.addToQueue(poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType);
+                        applyStatus({ fill: "blue", shape: "dot", text: "Message in queue " + new Date().toLocaleString() });
                     }
                 } catch (e) {
                     logOut(e);
@@ -208,7 +215,7 @@ module.exports = function (RED) {
             let release = await node.mutex.acquire();
 
             try {
-                var queue = node.uploader.getQueueAndClean();
+                const queue = node.uploader.getQueueAndClean();
                 if (queue.length) {
                     for (let item of queue) {
                         try {
@@ -389,7 +396,8 @@ module.exports = function (RED) {
         async function setUpPool(poolBody) {
             try {
                 const poolObj = await createOrGetPool(poolBody);
-                node.uploader.addToPoolTags(poolBody, poolObj)
+                poolObj.Tags = await loadTagsPool(poolObj.PoolKey);
+                node.uploader.addToPoolTags(poolBody, poolObj);
                 return poolObj;
             } catch (e) {
                 throw e;
@@ -428,6 +436,27 @@ module.exports = function (RED) {
             } catch (error) {
                 logOut("Unable to load pool: ", error);
                 applyStatus({ fill: "red", shape: "dot", text: "Error loading pool" });
+                throw error;
+            }
+        }
+
+        //Load pool tags
+        async function loadTagsPool(poolKey) {
+            applyStatus({ fill: "blue", shape: "dot", text: "Loading Pool Tags" });
+
+            try {
+                const res = await fetch(`${node.rootUrlv3}pool/${poolKey}/tags`, { method: 'GET', headers: headers, agent: agent });
+                if (res.status == 200) {
+                    const payload = await res.json();
+                    return payload;
+                } else {
+                    const text = await res.text();
+                    logOut("Unable to load pool tags, response: ", `${res.status}: ${text}`);
+                    throw res;
+                }
+            } catch (error) {
+                logOut("Unable to load pool tags: ", error);
+                applyStatus({ fill: "red", shape: "dot", text: "Error loading pool tags" });
                 throw error;
             }
         }
@@ -484,6 +513,7 @@ module.exports = function (RED) {
 
                     if (res.status == 200) {
                         const payload = await res.json();
+                        payload.Tags = await loadTagsStream(payload.StreamKey);
                         return payload;
                     } else {
                         const text = await res.text();
@@ -497,6 +527,27 @@ module.exports = function (RED) {
                 logOut(error);
                 applyStatus({ fill: "red", shape: "dot", text: "Error loading Stream" });
                 return false;
+            }
+        }
+
+        //Load stream tags
+        async function loadTagsStream(streamKey) {
+            applyStatus({ fill: "blue", shape: "dot", text: "Loading Stream Tags" });
+
+            try {
+                const res = await fetch(`${node.rootUrlv3}stream/${streamKey}/tags`, { method: 'GET', headers: headers, agent: agent });
+                if (res.status == 200) {
+                    const payload = await res.json();
+                    return payload;
+                } else {
+                    const text = await res.text();
+                    logOut("Unable to load stream tags, response: ", `${res.status}: ${text}`);
+                    throw res;
+                }
+            } catch (error) {
+                logOut("Unable to load stream tags: ", error);
+                applyStatus({ fill: "red", shape: "dot", text: "Error loading stream tags" });
+                throw error;
             }
         }
 
@@ -541,14 +592,14 @@ module.exports = function (RED) {
                     const res = await fetch(node.rootUrlv3 + `stream/${streamKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
                     //returns true if sucessfully added tags
                     if (res.status == 204 || res.status == 200) {
-                        resolve(true);
+                        return true;
                     } else {
                         applyStatus({ fill: "red", shape: "dot", text: "Error pushing tags to stream. Error: " + res.status });
-                        resolve(false);
+                        return false;
                     }
                 }
             } catch (error) {
-                reject(error);
+                throw error;
             }
         }
 
@@ -560,14 +611,14 @@ module.exports = function (RED) {
                     const res = await fetch(node.rootUrlv3 + `pool/${poolKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
                     //returns true if sucessfully added tags
                     if (res.status == 204 || res.status == 200) {
-                        resolve(true);
+                        return true;
                     } else {
                         applyStatus({ fill: "red", shape: "dot", text: "Error pushing tags to pool. Error: " + res.status });
-                        resolve(false);
+                        return false;
                     }
                 }
             } catch (error) {
-                reject(error);
+                throw error;
             }
         }
 

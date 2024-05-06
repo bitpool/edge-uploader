@@ -6,7 +6,7 @@
     "async-mutex": "^0.3.2",
     "https": "1.0.0",
     "node-fetch": "^2.6.7",
-    "toad-scheduler": "^1.6.1",
+    "toad-scheduler": "^3.0.1",
     "underscore": "^1.13.4"
   },
   "node-red": {

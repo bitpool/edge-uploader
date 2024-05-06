@@ -29,7 +29,7 @@ class Uploader {
         }
 
         this.getQueueAndClean = function () {
-            const result = this.queue.shift();
+            const result = this.queue;
             this.queue = [];
             return result;
         }
