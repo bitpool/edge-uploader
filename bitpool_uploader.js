@@ -430,8 +430,6 @@ module.exports = function (RED) {
 
         //Load pool tags
         async function loadTagsPool(poolKey) {
-            applyStatus({ fill: "blue", shape: "dot", text: "Loading Pool Tags" });
-
             try {
                 const res = await fetch(`${node.rootUrlv3}pool/${poolKey}/tags`, { method: 'GET', headers: headers, agent: agent });
                 if (res.status == 200) {
@@ -451,7 +449,7 @@ module.exports = function (RED) {
 
         //creates a new station in provided pool
         async function createOrGetStation(poolKey, pool) {
-            applyStatus({ fill: "blue", shape: "dot", text: "Loading station" });
+            applyStatus({ fill: "blue", shape: "dot", text: "Loading Station" });
 
             const stationName = pool.Name || pool.poolName || "1";
 
@@ -520,8 +518,6 @@ module.exports = function (RED) {
 
         //Load stream tags
         async function loadTagsStream(streamKey) {
-            applyStatus({ fill: "blue", shape: "dot", text: "Loading Stream Tags" });
-
             try {
                 const res = await fetch(`${node.rootUrlv3}stream/${streamKey}/tags`, { method: 'GET', headers: headers, agent: agent });
                 if (res.status == 200) {
