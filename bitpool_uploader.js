@@ -168,17 +168,24 @@ module.exports = function (RED) {
                     //object to be used in bulk upload
                     let valueObj;
 
+                    // v1.0.16 - added timestamp support on node input
+                    let ts = now.toISOString();
+
+                    if (msg.timestamp && msg.timestamp !== "undefined" && msg.timestamp !== null) {
+                        ts = msg.timestamp;
+                    }
+
                     //Support for different data types
                     if (dataType === "Double") {
                         valueObj = {
-                            "Ts": now.toISOString(),
+                            "Ts": ts,
                             "Val": msg.payload,
                             "ValStr": null,
                             "Calculated": false
                         };
                     } else if (dataType === "String") {
                         valueObj = {
-                            "Ts": now.toISOString(),
+                            "Ts": ts,
                             "Val": null,
                             "ValStr": msg.payload,
                             "Calculated": false
