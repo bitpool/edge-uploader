@@ -1,11 +1,12 @@
 {
   "name": "@bitpoolos/edge-uploader",
-  "version": "1.0.16",
+  "version": "1.0.19",
   "description": "A Node-RED module to push data to Bitpool.",
   "dependencies": {
     "async-mutex": "^0.5.0",
+    "axios": "^1.7.7",
+    "camelcase": "^6.3.0",
     "https": "1.0.0",
-    "node-fetch": "^2.7.0",
     "toad-scheduler": "^3.0.1",
     "underscore": "^1.13.6"
   },
@@ -29,23 +30,23 @@
     "iot"
   ],
   "engines": {
-      "node": ">=12.0.0"
+    "node": ">=12.0.0"
   },
   "author": {
-      "name": "bitpool-dev",
-      "email": "dev@bitpool.com"
+    "name": "bitpool-dev",
+    "email": "dev@bitpool.com"
   },
   "license": "MIT",
   "publishConfig": {
-      "access": "public",
-      "registry": "https://registry.npmjs.org/"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "bugs": {
     "url": "https://github.com/bitpool/edge-uploader/issues"
   },
-  "homepage": "https://github.com/bitpool/edge-uploader#readme",        
+  "homepage": "https://github.com/bitpool/edge-uploader#readme",
   "repository": {
-      "type": "github",
-      "url": "git+https://github.com/bitpool/edge-uploader.git"
+    "type": "github",
+    "url": "git+https://github.com/bitpool/edge-uploader.git"
   }
 }

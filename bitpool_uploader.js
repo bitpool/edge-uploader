@@ -5,13 +5,14 @@
 const { resolve } = require('path');
 
 module.exports = function (RED) {
-    const fetch = require('node-fetch');
+    const axios = require('axios');
     const https = require("https");
     const { Uploader } = require("./uploader")
     const { Log } = require("./log")
     const { ToadScheduler, SimpleIntervalJob, Task, AsyncTask } = require('toad-scheduler')
     const os = require("os");
     const { Mutex } = require("async-mutex");
+    const camelCase = require('camelcase');
 
     function BITPOOL(config) {
         RED.nodes.createNode(this, config);
@@ -25,6 +26,7 @@ module.exports = function (RED) {
         let public = poolSettings.public;
         let virtual = poolSettings.virtual;
         let uploadCount = config.uploadCount;
+        let timeout = config.timeout
         let uploadInterval = config.uploadInterval;
 
         let bpChkShowDateOnLabel = config.bpChkShowDateOnLabel;
@@ -47,14 +49,9 @@ module.exports = function (RED) {
 
         this.uploader = nodeContext.get("uploader") || new Uploader();
 
-        const agent = new https.Agent({
-            rejectUnauthorized: false
-        });
-
-        let headers = {
-            'Authorization': api_key,
-            'Content-Type': "application/json"
-        };
+        axios.defaults.timeout = timeout && timeout > 0 ? timeout : undefined;
+        axios.defaults.headers.common["Authorization"] = api_key;
+        axios.defaults.headers.common["Content-Type"] = "application/json";
 
         //schedule rebuild task
         const task = new Task('simple task', () => {
@@ -418,13 +415,13 @@ module.exports = function (RED) {
             applyStatus({ fill: "blue", shape: "dot", text: "Loading Pool" });
 
             try {
-                const res = await fetch(node.rootUrlv2 + "pools", { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(body) });
+                const res = await axios.post(`${node.rootUrlv2}pools`, body);
                 if (res.status == 200) {
-                    const payload = await res.json();
+                    const payload = res.data;
                     payload.Tags = await loadTagsPool(payload.PoolKey);
                     return payload;
                 } else {
-                    const text = await res.text();
+                    const text = res.data ? JSON.stringify(res.data) : "No response";
                     logOut("Unable to load pool, response: ", `${res.status}: ${text}`);
                     throw res;
                 }
@@ -438,12 +435,12 @@ module.exports = function (RED) {
         //Load pool tags
         async function loadTagsPool(poolKey) {
             try {
-                const res = await fetch(`${node.rootUrlv3}pool/${poolKey}/tags`, { method: 'GET', headers: headers, agent: agent });
+                const res = await axios.get(`${node.rootUrlv3}pool/${poolKey}/tags`);
                 if (res.status == 200) {
-                    const payload = await res.json();
+                    const payload = res.data;
                     return payload;
                 } else {
-                    const text = await res.text();
+                    const text = res.data ? JSON.stringify(res.data) : "No response";
                     logOut("Unable to load pool tags, response: ", `${res.status}: ${text}`);
                     throw res;
                 }
@@ -464,14 +461,14 @@ module.exports = function (RED) {
 
             if (!stationExists) {
                 try {
-                    const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(stationName) });
+                    const res = await axios.post(`${node.rootUrlv2}pools/${poolKey}/stations`, JSON.stringify(stationName));
                     if (res.status == 200) {
-                        const payload = await res.json();
+                        const payload = res.data;
                         const result = { poolKey: poolKey, StationID: payload.StationID };
                         node.uploader.addStation(result);
                         return result;
                     } else {
-                        const text = await res.text();
+                        const text = res.data ? JSON.stringify(res.data) : "No response";
                         logOut("Unable to create station, response: ", `${res.status}: ${text}`);
                         applyStatus({ fill: "blue", shape: "dot", text: "Error loading station. Error: " + res.status });
                         throw res;
@@ -502,14 +499,13 @@ module.exports = function (RED) {
                         "Public": public,
                         "DataType": dataType
                     };
-                    const res = await fetch(node.rootUrlv2 + `pools/${poolKey}/stations/${station.StationID}/streams`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(streamBody) });
-
+                    const res = await axios.post(`${node.rootUrlv2}pools/${poolKey}/stations/${station.StationID}/streams`, streamBody);
                     if (res.status == 200) {
-                        const payload = await res.json();
+                        const payload = res.data;
                         payload.Tags = await loadTagsStream(payload.StreamKey);
                         return payload;
                     } else {
-                        const text = await res.text();
+                        const text = res.data ? JSON.stringify(res.data) : "No response";
                         logOut("Unable to load stream, response: ", `${res.status}: ${text}`);
                         applyStatus({ fill: "red", shape: "dot", text: "Error loading Stream. Error: " + res.status });
                         throw res;
@@ -526,12 +522,12 @@ module.exports = function (RED) {
         //Load stream tags
         async function loadTagsStream(streamKey) {
             try {
-                const res = await fetch(`${node.rootUrlv3}stream/${streamKey}/tags`, { method: 'GET', headers: headers, agent: agent });
+                const res = await axios.get(`${node.rootUrlv3}stream/${streamKey}/tags`);
                 if (res.status == 200) {
-                    const payload = await res.json();
+                    const payload = res.data;
                     return payload;
                 } else {
-                    const text = await res.text();
+                    const text = res.data ? JSON.stringify(res.data) : "No response";
                     logOut("Unable to load stream tags, response: ", `${res.status}: ${text}`);
                     throw res;
                 }
@@ -546,19 +542,33 @@ module.exports = function (RED) {
         async function pushBulkUploadData(uploadData) {
             applyStatus({ fill: "blue", shape: "dot", text: "Pushing to Bitpool" });
             let body = JSON.stringify(uploadData);
-            try {
-                const res = await fetch(node.rootUrlv2 + "streams/logs", { method: 'POST', headers: headers, agent: agent, body: body });
-                if (res.status == 200) {
-                    return true;
-                } else {
-                    const text = await res.text();
-                    logOut("Unable to upload to bitpool, response: ", `${res.status}: ${text}`);
-                    return false;
+            let retryCount = 3;
+            let retryDelay = 5000;
+            let success = false;
+            while (retryCount > 0 && !success) {
+                try {
+                    const res = await axios.post(`${node.rootUrlv2}streams/logs`, body);
+                    if (res.status == 200) {
+                        success = true;
+                    } else {
+                        const text = res.data ? JSON.stringify(res.data) : "No response";
+                        logOut("Unable to upload to bitpool, response: ", `${res.status}: ${text}`);
+                        retryCount--;
+                        if (retryCount > 0) {
+                            logOut(`Retrying in ${retryDelay} ms`);
+                            await new Promise(resolve => setTimeout(resolve, retryDelay));
+                        }
+                    }
+                } catch (error) {
+                    logOut("Unable to upload to bitpool: ", error);
+                    retryCount--;
+                    if (retryCount > 0) {
+                        logOut(`Retrying in ${retryDelay} ms`);
+                        await new Promise(resolve => setTimeout(resolve, retryDelay));
+                    }
                 }
-            } catch (error) {
-                logOut("Unable to upload to bitpool: ", error);
-                throw error;
             }
+            return success;
         }
 
         async function addTagsToStream(streamKey, tags) {
@@ -575,11 +585,31 @@ module.exports = function (RED) {
             }
         }
 
+        function fixTags(tags) {
+            // fix tags format
+            for (let i = 0; i < tags.length; i++) {
+                // if tag start with not alpha, add 'a' to it
+                if (!/^[a-zA-Z]/.test(tags[i])) {
+                    tags[i] = 'a' + tags[i];
+                }
+                // convert tags to camelCase
+                if (tags[i].includes("=")) {
+                    const parts = tags[i].split("=").map(x => x.trim());
+                    tags[i] = `${camelCase(parts[0])}=${parts[1]}`;
+                } else {
+                    tags[i] = camelCase(tags[i].trim());
+                }
+            }
+            return tags;
+        }
+
         //Inserts specified tags to current stream
         async function pushNewTagsToStream(streamKey, tags) {
             applyStatus({ fill: "blue", shape: "dot", text: "Pushing tags to stream" });
             if (typeof streamKey !== 'undefined' && streamKey !== "" && streamKey !== null && tags) {
-                const res = await fetch(node.rootUrlv3 + `stream/${streamKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
+                tags = fixTags(tags);
+                // upload tags
+                const res = await axios.post(`${node.rootUrlv3}stream/${streamKey}/tags`, tags);
                 //returns true if sucessfully added tags
                 if (res.status == 204 || res.status == 200) {
                     return true;
@@ -596,7 +626,9 @@ module.exports = function (RED) {
         async function pushNewTagsToPool(poolKey, tags) {
             applyStatus({ fill: "blue", shape: "dot", text: "Pushing tags to pool" });
             if (typeof poolKey !== 'undefined' && poolKey !== "" && poolKey !== null && tags) {
-                const res = await fetch(node.rootUrlv3 + `pool/${poolKey}/tags`, { method: 'POST', headers: headers, agent: agent, body: JSON.stringify(tags) });
+                tags = fixTags(tags);
+                // upload tags
+                const res = await axios.post(`${node.rootUrlv3}pool/${poolKey}/tags`, tags);
                 //returns true if sucessfully added tags
                 if (res.status == 204 || res.status == 200) {
                     return true;
@@ -673,7 +705,7 @@ module.exports = function (RED) {
         function logOut(param1, param2) {
             if (bpChkShowDebugWarnings) {
                 if (param1) node.warn(param1);
-                if (param2) node.warn(JSON.stringify(param2));
+                if (param2) node.warn(param2.response?.data ? JSON.stringify(param2.response?.data) : param2.response ? JSON.stringify(param2.response) : JSON.stringify(param2));
             }
         }
     };

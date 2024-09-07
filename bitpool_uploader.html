@@ -9,18 +9,19 @@
         category: 'Bitpool Cloud',
         color: '#00aeef',
         defaults: {
-            name: {value: ""},
-            events: {value: true},
-            apiKey: {type: "Bitpool-Api-Key", required: true},
-            pool_settings: {type: "Bitpool-Pool-Settings", required: false},
-            stream_name: {value: "", required: false},
-            uploadCount: {value: 800, required: true},
-            uploadInterval: {value: ""},
-            uploadInterval_value: {value: "1", required: true},
-            uploadInterval_options: {value: "Minutes", required: true},
-            bpChkShowDateOnLabel: {value: true},
-            bpChkShowDebugWarnings: {value: true},
-            rebuildOnError: {value: true},
+            name: { value: "" },
+            events: { value: true },
+            apiKey: { type: "Bitpool-Api-Key", required: true },
+            pool_settings: { type: "Bitpool-Pool-Settings", required: false },
+            stream_name: { value: "", required: false },
+            uploadCount: { value: 800, required: true },
+            timeout: { value: 0, required: false },
+            uploadInterval: { value: "" },
+            uploadInterval_value: { value: "1", required: true },
+            uploadInterval_options: { value: "Minutes", required: true },
+            bpChkShowDateOnLabel: { value: true },
+            bpChkShowDebugWarnings: { value: true },
+            rebuildOnError: { value: true },
             PoolTags: { value: "" }
         },
         inputs: 1,
@@ -173,6 +174,11 @@
             <div class="form-row">
                 <label for="node-input-uploadCount"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.uploadCount"></span>Upload Max Count</label>
                 <input type="number" id="node-input-uploadCount" placeholder="800">
+            </div>
+
+            <div class="form-row">
+                <label for="node-input-timeout"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.timeout"></span>Timeout (ms)</label>
+                <input type="number" id="node-input-timeout" placeholder="0">
             </div>
 
             <div class="form-row">
