@@ -2,315 +2,457 @@
   MIT License Copyright 2021-2024 - Bitpool Pty Ltd
 -->
 
-
 <script type="text/javascript">
-
-    RED.nodes.registerType('uploader', {
-        category: 'Bitpool Cloud',
-        color: '#00aeef',
-        defaults: {
-            name: { value: "" },
-            events: { value: true },
-            apiKey: { type: "Bitpool-Api-Key", required: true },
-            pool_settings: { type: "Bitpool-Pool-Settings", required: false },
-            stream_name: { value: "", required: false },
-            uploadCount: { value: 800, required: true },
-            timeout: { value: 0, required: false },
-            uploadInterval: { value: "" },
-            uploadInterval_value: { value: "1", required: true },
-            uploadInterval_options: { value: "Minutes", required: true },
-            bpChkShowDateOnLabel: { value: true },
-            bpChkShowDebugWarnings: { value: true },
-            rebuildOnError: { value: true },
-            PoolTags: { value: "" }
+  RED.nodes.registerType("uploader", {
+    category: "Bitpool Cloud",
+    color: "#00aeef",
+    defaults: {
+      name: { value: "" },
+      events: { value: true },
+      apiKey: { type: "Bitpool-Api-Key", required: true },
+      pool_settings: { type: "Bitpool-Pool-Settings", required: false },
+      stream_name: { value: "", required: false },  // Backward compatibility hide and replace with uploadCountV2
+      uploadCount: { value: 100, required: true },  // Backward compatibility hide and replace with uploadCountV2
+      uploadCountV2: { value: 4, required: false },
+      timeout: { value: 10, required: false },
+      uploadInterval: { value: "" },
+      uploadInterval_value: { value: "15", required: true },
+      uploadInterval_options: { value: "Minutes", required: true },
+      bpChkShowDateOnLabel: { value: true },      // Backward compatibility hide
+      bpChkShowDebugWarnings: { value: true },
+      rebuildOnError: { value: true },          // Backward compatibility hide
+      PoolTags: { value: "" },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "bitpool.svg",
+    label: function () {
+      return this.name || "uploader";
+    },
+    oneditprepare: function () {
+      let tabs = RED.tabs.create({
+        id: "node-input-read-tabs",
+        onchange: function (tab) {
+          $("#node-input-tabs-content").children().hide();
+          $("#" + tab.id).show();
         },
-        inputs: 1,
-        outputs: 1,
-        icon: "bitpool.svg",
-        label: function () {
-            return this.name || "uploader";
-        },
-        oneditprepare: function () {
-            let tabs = RED.tabs.create(
-                {
-                    id: "node-input-read-tabs",
-                    onchange: function (tab) {
-                        $("#node-input-tabs-content").children().hide()
-                        $("#" + tab.id).show()
-                    }
-                });
+      });
 
-            tabs.addTab(
-                {
-                    id: "properties-tab",
-                    label: "Properties"
-                });
+      tabs.addTab({
+        id: "properties-tab",
+        label: "Properties",
+      });
 
-            tabs.addTab(
-                {
-                    id: "pooltags-tab",
-                    label: "Pool Tags"
-                }
-            );
+      tabs.addTab({
+        id: "pooltags-tab",
+        label: "Pool Tags",
+      });
 
-            tabs.addTab(
-                {
-                    id: "options-tab",
-                    label: "Options"
-                });
+      tabs.addTab({
+        id: "options-tab",
+        label: "Options",
+      });
 
+      //pool tags button binding
+      $("#bitpoolPoolTagsAddButton").on("click", function () {
+        let key = $("#node-input-bitpoolPoolTags").val();
+        let value = $("#node-input-bitpoolPoolTagValue").val();
+        let tag = `${key}=${value}`;
 
+        let currentTags = $("#node-input-PoolTags").val();
 
-            //pool tags button binding
-            $("#bitpoolPoolTagsAddButton").on("click", function() {
-                let key = $("#node-input-bitpoolPoolTags").val();
-                let value = $("#node-input-bitpoolPoolTagValue").val();
-                let tag = `${key}=${value}`;
-
-                let currentTags = $("#node-input-PoolTags").val();
-
-                if(value !== "") {
-                    if(currentTags == "") {
-                        $("#node-input-PoolTags").val(tag);
-                    } else {
-                        let updatedTagString = `${currentTags}, ${tag}`;
-                        $("#node-input-PoolTags").val(updatedTagString);
-                    }                
-                }
-            });
-
-           $("#customPoolTagsAddButton").on("click", function() {
-                let customTag = $("#node-input-customPoolTag").val();
-                let currentTags = $("#node-input-PoolTags").val();
-
-                if(customTag !== ""){
-                    if(currentTags == "") {
-                        $("#node-input-PoolTags").val(customTag);
-                    } else {
-                        let updatedTagString = `${currentTags}, ${customTag}`;
-                        $("#node-input-PoolTags").val(updatedTagString);
-                    }
-                }
-            });
-
-        },
-        oneditsave: function () {
-            document.getElementById("node-input-uploadInterval").value = getTimePeriodInSeconds(
-                document.getElementById("node-input-uploadInterval_value").value,
-                document.getElementById("node-input-uploadInterval_options").value
-            );
-        },
-    });
-
-    function getTimePeriodInSeconds(value, interval) {
-        switch (interval) {
-            case "Seconds":
-                return value;
-                break;
-            case "Minutes":
-                return value * 60;
-                break;
-            case "Hours":
-                return value * 3600;
-                break;
-            case "Days":
-                return value * 86400;
-                break;
-            default:
-            // code block
+        if (value !== "") {
+          if (currentTags == "") {
+            $("#node-input-PoolTags").val(tag);
+          } else {
+            let updatedTagString = `${currentTags}, ${tag}`;
+            $("#node-input-PoolTags").val(updatedTagString);
+          }
         }
-    }
+      });
 
+      $("#customPoolTagsAddButton").on("click", function () {
+        let customTag = $("#node-input-customPoolTag").val();
+        let currentTags = $("#node-input-PoolTags").val();
+
+        if (customTag !== "") {
+          if (currentTags == "") {
+            $("#node-input-PoolTags").val(customTag);
+          } else {
+            let updatedTagString = `${currentTags}, ${customTag}`;
+            $("#node-input-PoolTags").val(updatedTagString);
+          }
+        }
+      });
+    },
+    oneditsave: function () {
+      document.getElementById("node-input-uploadInterval").value =
+        getTimePeriodInSeconds(
+          document.getElementById("node-input-uploadInterval_value").value,
+          document.getElementById("node-input-uploadInterval_options").value
+        );
+    },
+  });
+
+  function getTimePeriodInSeconds(value, interval) {
+    switch (interval) {
+      case "Seconds":
+        return value;
+        break;
+      case "Minutes":
+        return value * 60;
+        break;
+      case "Hours":
+        return value * 3600;
+        break;
+      case "Days":
+        return value * 86400;
+        break;
+      default:
+      // code block
+    }
+  }
 </script>
 
-<style>
 
-
-</style>
+<style></style>
 
 <script type="text/html" data-template-name="uploader">
-    
-    <style>
-        .form-row {
-            align-items: center;
-            flex-wrap: nowrap !important;
-            display: flex;
-        }
-        button {
-            height: 34px;
-            border-radius: 5px !important;
-        }
-    </style>
+  <style>
+    .form-row {
+      align-items: center;
+      flex-wrap: nowrap !important;
+      display: flex;
+    }
+    button {
+      height: 34px;
+      border-radius: 5px !important;
+    }
+    .node-ports ul li {
+      border: none !important;
+    }    
+  </style>
 
-    <div class='form-row node-input-read-tabs-row'>
-        <ul style='min-width:600px;margin-bottom:20px' id='node-input-read-tabs'></ul>
+  <div class="form-row node-input-read-tabs-row">
+    <ul
+      style="min-width:600px;margin-bottom:20px"
+      id="node-input-read-tabs"
+    ></ul>
+  </div>
+
+  <div id="node-input-tabs-content">
+    <div id="properties-tab" style="display:none">
+      <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name" />
+      </div>
+
+      <div class="form-row" style="display: flex;">
+        <p>API Key:</p>
+        <label for="node-input-apiKey" style="width: 46px;"
+          ><i class="icon-globe"></i> <span data-i18n="API Key"></span
+        ></label>
+        <input type="text" id="node-input-apiKey" style="display: contents;" />
+      </div>
+
+      <div class="form-row" style="display: flex;">
+        <p>Pool Settings:</p>
+        <label for="node-input-pool_settings" style="width: 14px;"
+          ><i class="icon-globe"></i> <span data-i18n="Pool Settings"></span
+        ></label>
+        <input
+          type="text"
+          id="node-input-pool_settings"
+          style="display: contents;"
+        />
+      </div>
+
+      <!-- Hide this for backward compatibility -->
+      <div class="form-row" style="display: none;">
+        <label for="node-input-stream_name"
+          ><i class="icon-tag"></i>
+          <span data-i18n="bitpool-uploader.label.stream_name"></span>Stream Name</label
+        >
+        <input
+          type="text"
+          id="node-input-stream_name"
+          placeholder="msg.stream"
+        />
+      </div>
+
+       <!-- Hide this for backward compatibility -->
+      <div class="form-row"  style="display: none;">
+        <label for="node-input-uploadCount">
+          <i class="icon-tag"></i>
+          <span data-i18n="bitpool-uploader.label.uploadCount"></span>Upload On Stream Count
+        </label>
+        <input type="number" id="node-input-uploadCount" placeholder="100" />
+      </div> 
+      <!-- Hide this for backward compatibility -->
+
+      <div class="form-row"  style="display: flex;">
+        <label for="node-input-uploadCountV2">
+          <i class="icon-tag"></i>
+          <span data-i18n="bitpool-uploader.label.uploadCountV2"></span>Upload On<br>Log Count
+        </label>
+        <input type="number" id="node-input-uploadCountV2" placeholder="4" />
+      </div>      
+
+      <div class="form-row" style="display: flex;">
+        <label for="node-input-uploadInterval" style="align-self: center;"
+          ><i class="icon-tag"></i>
+          <span data-i18n="bitpool-uploader.label.uploadInterval"></span
+          >Upload On<br>Expired Time
+        </label>
+        <input
+          type="text"
+          id="node-input-uploadInterval"
+          style="display: none;"
+        />
+        <input
+          type="number"
+          id="node-input-uploadInterval_value"
+          placeholder="5"
+          style="width: 70px; margin-right: 5px;"
+        />
+        <select
+          name="timePeriod"
+          id="node-input-uploadInterval_options"
+          style="width: 120px; margin-right: 5px;"
+        >
+          <option value="Seconds">Seconds</option>
+          <option value="Minutes">Minutes</option>
+          <option value="Hours">Hours</option>
+          <option value="Days">Days</option>
+        </select>
+      </div>
+
+      <div class="form-row" style="display: flex;">
+        <label for="node-input-timeout" style="display: block;">
+          <i class="icon-tag"></i>
+          <span data-i18n="@bitpoolos/edge-uploader/bitpool_uploader:bitpool-uploader.label.timeout"></span>
+          Network<br>Timeout Secs
+        </label>
+        <input type="number" id="node-input-timeout" placeholder="10" autocomplete="off" dir="">
+      </div>
+
     </div>
 
-    <div id='node-input-tabs-content'>
-
-        <div id='properties-tab' style='display:none'>
-            <div class="form-row">
-                <label for="node-input-name"><i class="icon-tag"></i> Name</label>
-                <input type="text" id="node-input-name" placeholder="Name">
-            </div>
-
-            <div class="form-row" style="display: flex;">
-                <p> API Key: </p>
-                <label for="node-input-apiKey" style="width: 49px;" ><i class="icon-globe"></i> <span data-i18n="API Key"></span></label>
-                <input type="text" id="node-input-apiKey" style="display: contents;">
-            </div>
-
-            <div class="form-row" style="display: flex;">
-                <p> Pool Settings: </p>
-                <label for="node-input-pool_settings" style="width: 18px;"><i class="icon-globe"></i> <span data-i18n="Pool Settings"></span></label>
-                <input type="text" id="node-input-pool_settings" style="display: contents;">
-            </div>
-
-            <div class="form-row">
-                <label for="node-input-stream_name"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.stream_name"></span>Stream Name</label>
-                <input type="text" id="node-input-stream_name" placeholder="msg.stream">
-            </div>
-
-            <div class="form-row">
-                <label for="node-input-uploadCount"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.uploadCount"></span>Upload Max Count</label>
-                <input type="number" id="node-input-uploadCount" placeholder="800">
-            </div>
-
-            <div class="form-row">
-                <label for="node-input-timeout"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.timeout"></span>Timeout (ms)</label>
-                <input type="number" id="node-input-timeout" placeholder="0">
-            </div>
-
-            <div class="form-row">
-                <label for="node-input-uploadInterval" style="align-self: center;"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.uploadInterval"></span>Upload Interval </label>
-                <input type="text" id="node-input-uploadInterval" style="display: none;">
-                <input type="number" id="node-input-uploadInterval_value" placeholder="5" style="width: 70px; margin-right: 5px;">
-                <select name="timePeriod" id="node-input-uploadInterval_options" style="width: 120px; margin-right: 5px;">
-                    <option value="Seconds">Seconds</option>
-                    <option value="Minutes">Minutes</option>
-                    <option value="Hours">Hours</option>
-                    <option value="Days">Days</option>
-                </select>
-            </div>
+    <div id="options-tab">
+      <div class="form-row">
+        <p><u>Monitoring:</u></p>
+      </div>
+      <!-- Hide this for backward compatibility -->
+      <div class="form-row" style="display: none;">
+        <div
+          class="form-check"
+          style="width: 10%; display: grid; align-items: baseline;"
+        >
+          <input
+            class="form-check-input"
+            type="checkbox"
+            value=""
+            id="node-input-bpChkShowDateOnLabel"
+            checked
+          />
         </div>
-
-        <div id='options-tab'>
-            <div class="form-row"><p><u>Monitoring:</u></p></div>
-            <div class="form-row" style="display: flex;">
-            <div class="form-check" style="width: 10%; display: grid; align-items: baseline;">
-                <input class="form-check-input" type="checkbox" value="" id="node-input-bpChkShowDateOnLabel" checked>
-            </div>
-            <label id="node-label-bpChkShowDateOnLabel" for="node-input-bpChkShowDateOnLabel" style="text-align:left; vertical-align:bottom; width: 100%; padding-left: 35px;">Show input activity on node status</label>
-            </div>
-            <div class="form-row" style="display: flex;">
-            <div class="form-check" style="width: 10%; display: grid; align-items: baseline;">
-                <input class="form-check-input" type="checkbox" value="" id="node-input-bpChkShowDebugWarnings" checked>
-            </div>
-            <label id="node-label-bpChkShowDebugWarnings" for="node-input-bpChkShowDebugWarnings" style="text-align:left; vertical-align:middle; width: 100%; padding-left: 35px;">Show any warnings in debug tab</label>
-            </div>
-
-            <div class="form-row"><p><u>Rebuild:</u></p></div>
-            <div class="form-row" style="display: flex;">
-                <div class="form-check" style="width: 10%; display: grid; align-items: baseline;">
-                    <input class="form-check-input" type="checkbox" value="" id="node-input-rebuildOnError" checked>
-                </div>
-                <label id="node-label-rebuildOnError" for="node-input-rebuildOnError" style="text-align:left; vertical-align:bottom; width: 100%; padding-left: 35px;">Rebuild stored data on upload error</label>
-            </div>
-
+        <label
+          id="node-label-bpChkShowDateOnLabel"
+          for="node-input-bpChkShowDateOnLabel"
+          style="text-align:left; vertical-align:bottom; width: 100%; padding-left: 35px;"
+          >Show input activity on node status</label
+        >
+      </div>
+      <div class="form-row" style="display: flex;">
+        <div
+          class="form-check"
+          style="width: 10%; display: grid; align-items: baseline;"
+        >
+          <input
+            class="form-check-input"
+            type="checkbox"
+            value=""
+            id="node-input-bpChkShowDebugWarnings"
+            checked
+          />
         </div>
-
-        <div id='pooltags-tab'>
-            <!-- Pool Tags section-->
-            <div class="form-row">
-                <p><strong>Pool Tags:</strong></p>
-            </div>
-
-            <div class="form-row" style="display: flex;">
-                <label for="node-input-bitpoolPoolTags"><i class="icon-tag"></i> Bitpool Tags:</label>
-                <select name="bpTags" id="node-input-bitpoolPoolTags" style="width: 30%; margin-right: 5px;">
-                    <option value="customer">customer</option>
-                    <option value="address">address</option>
-                    <option value="latitude">latitude</option>
-                    <option value="longitude">longitude</option>
-                    <option value="email">email</option>
-                    <option value="phoneNumber">phoneNumber</option>
-                    <option value="state">state</option>
-                    <option value="country">country</option>
-                    <option value="area">area</option>
-                </select>
-                <input type="text" id="node-input-bitpoolPoolTagValue" placeholder="Value" style="width: 34%; margin-right: 5px;">
-                <button class="ui-button ui-corner-all ui-widget" id="bitpoolPoolTagsAddButton" style="margin-left: 5px; padding-top: 0px; padding-bottom: 0px; 
-                min-width: fit-content;"><div>Add Tag</div></button>
-
-            </div>
-            <div class="form-row">
-                <label for="node-input-customPoolTag"><i class="icon-tag"></i> Custom Tag:</label>
-                <input type="text" id="node-input-customPoolTag" placeholder="Custom Tags" style="width: 65%;">
-                <button class="ui-button ui-corner-all ui-widget" id="customPoolTagsAddButton" style="margin-left: 10px; padding-top: 0px; padding-bottom: 0px; 
-                min-width: fit-content;"><div>Add Tag</div></button>
-            </div>
-            <div class="form-row">
-                <input type="text" id="node-input-PoolTags" placeholder="Tag List" data-role="tagsinput" style="width: 100%;">
-            </div>
+        <label
+          id="node-label-bpChkShowDebugWarnings"
+          for="node-input-bpChkShowDebugWarnings"
+          style="text-align:left; vertical-align:middle; width: 100%; padding-left: 35px;"
+          >Show any warnings or errors in debug tab</label
+        >
+      </div>
+      
+      <!-- Hide this for backward compatibility -->
+      <div class="form-row" style="display: none;">
+        <p><u>Rebuild:</u></p>
+      </div>
+      <div class="form-row" style="display: none;">
+        <div
+          class="form-check"
+          style="width: 10%; display: grid; align-items: baseline;"
+        >
+          <input
+            class="form-check-input"
+            type="checkbox"
+            value=""
+            id="node-input-rebuildOnError"
+            checked
+          />
         </div>
+        <label
+          id="node-label-rebuildOnError"
+          for="node-input-rebuildOnError"
+          style="text-align:left; vertical-align:bottom; width: 100%; padding-left: 35px;"
+          >Rebuild stored data on upload error</label
+        >
+      </div>
     </div>
+      <!-- Hide this for backward compatibility -->
 
+    <div id="pooltags-tab">
+      <!-- Pool Tags section-->
+      <div class="form-row">
+        <p><strong>Pool Tags:</strong></p>
+      </div>
+
+      <div class="form-row" style="display: flex;">
+        <label for="node-input-bitpoolPoolTags"
+          ><i class="icon-tag"></i> Bitpool Tags:</label
+        >
+        <select
+          name="bpTags"
+          id="node-input-bitpoolPoolTags"
+          style="width: 30%; margin-right: 5px;"
+        >
+          <option value="customer">customer</option>
+          <option value="address">address</option>
+          <option value="latitude">latitude</option>
+          <option value="longitude">longitude</option>
+          <option value="email">email</option>
+          <option value="phoneNumber">phoneNumber</option>
+          <option value="state">state</option>
+          <option value="country">country</option>
+          <option value="area">area</option>
+        </select>
+        <input
+          type="text"
+          id="node-input-bitpoolPoolTagValue"
+          placeholder="Value"
+          style="width: 34%; margin-right: 5px;"
+        />
+        <button
+          class="ui-button ui-corner-all ui-widget"
+          id="bitpoolPoolTagsAddButton"
+          style="margin-left: 5px; padding-top: 0px; padding-bottom: 0px; 
+                min-width: fit-content;"
+        >
+          <div>Add Tag</div>
+        </button>
+      </div>
+      <div class="form-row">
+        <label for="node-input-customPoolTag"
+          ><i class="icon-tag"></i> Custom Tag:</label
+        >
+        <input
+          type="text"
+          id="node-input-customPoolTag"
+          placeholder="Custom Tags"
+          style="width: 65%;"
+        />
+        <button
+          class="ui-button ui-corner-all ui-widget"
+          id="customPoolTagsAddButton"
+          style="margin-left: 10px; padding-top: 0px; padding-bottom: 0px; 
+                min-width: fit-content;"
+        >
+          <div>Add Tag</div>
+        </button>
+      </div>
+      <div class="form-row">
+        <input
+          type="text"
+          id="node-input-PoolTags"
+          placeholder="Tag List"
+          data-role="tagsinput"
+          style="width: 100%;"
+        />
+      </div>
+    </div>
+  </div>
 </script>
 
 <script type="text/html" data-help-name="uploader">
-    <p> A node that connects data sources with the Bitpool cloud. Bitpool Cloud works on Pools and Streams, a Pool is a collection of Streams
-    and a Stream is a specific data point. Find out more at https://wiki.bitpool.com  </p>
+  <style>
+    .node-ports ul li {
+      border: none !important;
+    }    
+  </style>
 
-        <h3><strong>API Key</strong></h3>
-        <ol class="node-ports">
-        <ul>
-            <li><i><strong>Api Key:</strong></i> Specify your API key provided by https://app.bitpool.com </i></li>
-        </ul></p>
-        <p> 
-        
-        </ol>
+  <h3><strong>Overview:</strong></h3>
+  <p>This node connects data sources to the Bitpool Cloud using the concept of Pools and Streams: a Pool is a collection of Streams, and a Stream represents a specific data point with usage records. Learn more at <a href="https://wiki.bitpool.com" target="_blank">Bitpool Wiki</a>.</p>
 
-        <h3><strong>Pool Settings</strong></h3>
-        <ol class="node-ports">
-        <ul>
-             <li><i><strong>Pool Name:</strong></i> Enter the pool name for the data to be stored in for Bitpool OS. This can be manually set or parsed in on msg.pool </i></li>
-             <li><i><strong>Pool Key:</strong></i> Enter the pool key for the stream to be stored in the pool for Bitpool OS. This can be manually set or parsed in on msg.poolKey</i></li>
-             <li><i><strong>Public Pool: </strong> Whether or not the pool is public</i></li>
-             <li><i><strong>Virtual Pool: </strong> Whether or not the pool is virtual</i></li>
-        </ul></p>
-        <p> 
-         
-        </ol>
+  <h3><strong>Basic Usage:</strong></h3>
+  <p>A new record can be added to a Stream by sending a message to the input of the Uploader node. The message must include a Stream Name (<strong>msg.topic</strong>) and a payload (<strong>msg.payload</strong>). Metadata can be added to the record by adding a meta object to the message (<strong>msg.meta</strong>). As long as the API Key is valid and the Pool Name is correct, then data will be uploaded to Bitpool.</p>
 
-        <h3><strong>Bitpool Uploader</strong></h3>
-        <ol class="node-ports">
+  <h3><strong>API Key</strong></h3>
+      <ol class="node-ports">
+      <ul>
+          <li><strong>API Key:</strong> Specify your API key provided by <a href="https://app.bitpool.com" target="_blank">https://app.bitpool.com</a></li>          
+      </ul></p>
+      <p>
+
+      </ol>
+
+      <h3><strong>Pool Settings</strong></h3>
+      <ol class="node-ports">
+      <ul>
+           <li><strong>Pool Name:</strong> Enter the pool name where the data will be stored in the Bitpool platform.</li>           
+           <li><strong>Public Pool: </strong> Indicates whether the pool is public.</li>
+           <li><strong>Virtual Pool: </strong> Indicates whether the pool is virtual.</li>
+      </ul></p>
+      <p>
+      </ol>
+
+      <h3><strong>Bitpool Uploader</strong></h3>
+      <ol class="node-ports">
         <ul>
-            <li><i><strong>Stream Name:</strong></i> Enter the stream name for the data point to be stored in the pool for Bitpool OS. This can be manually set or parsed in on msg.stream</i></li>
-        </ul></p>
-        <ul>
-            <li><i><strong>Upload Max Count:</strong></i> The amount of logs the uploader will cache before uploading the data to Bitpool OS. This can be used for system tuning purposes</i></li>
+          <li><strong>Upload On Log Count:</strong> The maximum number of cached stream records before data is uploaded. The default is 4 records per stream.</li>
+          <li><strong>Upload On Expired Time:</strong> The maximum number of minutes that elapse from the last upload timer event before data is uploaded. The default is 15 minute.</li>
+          <li><strong>Network Timeout Secs:</strong> The number of seconds an HTTP request will wait for the server before timing out. The default is 10 seconds.</li>
         </ul>
+      </ol>
+      
+      <h3><strong>Options</strong></h3>
+      <ol class="node-ports">
         <ul>
-            <li><i><strong>Upload Interval:</strong></i> The amount of time the uploader will wait before uploading the data to Bitpool OS. This can be used for system tuning purposes</i></li>
+          <li><strong>Monitoring:</strong> Toggles system outputs and logging in both status and debug sections</li>
         </ul>
         <p>
-        </ol>
-        <h3><strong>Options</strong></h3>
+      </ol>
+
+      <h3><strong>Action Commands</strong></h3>
         <ol class="node-ports">
         <ul>
-            <li><i><strong>Monitoring:</strong></i> Toggles system outputs and logging in both status and debug sections</i></li>
-        </ul></p>
-        <ul>
-            <li><i><strong>Rebuild:</strong></i> Toggles the rebuild trigger if an upload fails</i></li>
+          <p>You can send action commands to the input of the Uploader node to assist with debugging. Use <strong>msg.BPCommand</strong> on an Inject node and set string to:</p>  
+          <li><strong>SHOW_CONFIG:</strong> Outputs the current configuration to the debug tab as an object. Note, you need to add a debug node to the Uploader output.</li>          
+          <li><strong>SHOW_POOL:</strong> Outputs the current pool model to the debug tab as an object. Note, you need to add a debug node to the Uploader output.</li>
+          <li><strong>CREATE_POOL:</strong> Creates a new pool model based on the configuration pool name (<strong>Note 1</strong>). Sends message to debug tab to acknowledge.</li>
+          <li><strong>SAVE_POOL:</strong> Saves the current pool model to a file. Sends message to debug tab to acknowledge.</li>
+          <li><strong>PURGE_DATA:</strong> Purges all record data stored on this node. Sends message to debug tab to acknowledge.</li>
+          <li><strong>UPLOAD_DATA:</strong> Uploads all record data stored on this node. Sends message to debug tab to acknowledge.</li>
+          <p><i><strong>Note 1.</strong> <span style="color: rgb(147, 56, 56, 1) !important;">If you’re adding multiple Uploaders to your flows, make sure to assign a unique name to each pool. This is important because each pool generates its own configuration file. Failure to do so may lead to uploads going to the wrong pool or cause configuration file problems.</span></i></p>
         </ul>
-        <p>
-        </ol>
+      </ol>
 
-        <h3>Resources:</h3>
-        <h4><strong>Online Docs:</strong></h4>
-        <ul type="1">
-          <li><a href="https://www.bitpool.com/">bitpool.com</a> - check us out here.</li>
-          <li><a href="https://app.bitpool.com/">app.bitpool.com</a> - set up your account.</li>
-          <li><a href="https://wiki.bitpool.com/">wiki.bitpool.com</a> - find more documentation.</li>
-        </ul>
-</script>
+      <h3><strong>Resources:</strong></h3>
+      <ol class="node-ports">
+      <ul type="1">
+        <li><a href="https://www.bitpool.com/">bitpool.com</a> - check us out here.</li>
+        <li><a href="https://app.bitpool.com/">app.bitpool.com</a> - set up your account.</li>
+        <li><a href="https://wiki.bitpool.com/">wiki.bitpool.com</a> - find more documentation.</li>
+      </ul>
+    </ol>
+
+    </script>

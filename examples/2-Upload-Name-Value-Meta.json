@@ -1,0 +1,131 @@
+[
+    {
+        "id": "b1a5ef0bdd0af47b",
+        "type": "debug",
+        "z": "4a2c7dab2beb4f28",
+        "name": "Debug",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 830,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "16904cded652f885",
+        "type": "inject",
+        "z": "4a2c7dab2beb4f28",
+        "name": "Upload Stream Record",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "stream name 1",
+        "payload": "",
+        "payloadType": "date",
+        "x": 180,
+        "y": 100,
+        "wires": [
+            [
+                "229ac627d4af38af"
+            ]
+        ]
+    },
+    {
+        "id": "4985eddfc26bd248",
+        "type": "uploader",
+        "z": "4a2c7dab2beb4f28",
+        "name": "Bitpool Uploader",
+        "events": true,
+        "apiKey": "",
+        "pool_settings": "",
+        "stream_name": "",
+        "uploadCount": 100,
+        "uploadCountV2": 4,
+        "timeout": 10,
+        "uploadInterval": "900",
+        "uploadInterval_value": "15",
+        "uploadInterval_options": "Minutes",
+        "bpChkShowDateOnLabel": true,
+        "bpChkShowDebugWarnings": true,
+        "rebuildOnError": true,
+        "PoolTags": "",
+        "x": 630,
+        "y": 100,
+        "wires": [
+            [
+                "b1a5ef0bdd0af47b"
+            ]
+        ]
+    },
+    {
+        "id": "229ac627d4af38af",
+        "type": "metatag",
+        "z": "4a2c7dab2beb4f28",
+        "name": "Meta Data",
+        "metatag": "",
+        "StreamTags": "",
+        "tagRegisters": [
+            {
+                "filter": "",
+                "tagList": ""
+            }
+        ],
+        "streamTagList": [
+            {
+                "optValue": "deviceManufacturer",
+                "type": "String"
+            },
+            {
+                "optValue": "deviceType",
+                "type": "String"
+            },
+            {
+                "optValue": "deviceLocation",
+                "type": "String"
+            },
+            {
+                "optValue": "systemType",
+                "type": "String"
+            },
+            {
+                "optValue": "protocol",
+                "type": "String"
+            }
+        ],
+        "taglib": "",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 410,
+        "y": 100,
+        "wires": [
+            [
+                "4985eddfc26bd248"
+            ]
+        ]
+    }
+]

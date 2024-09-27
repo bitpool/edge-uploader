@@ -4,210 +4,428 @@
 
 
 const _ = require("underscore");
+const camelCase = require('camelcase');
 
-class Uploader {
+// If we have not worked out the data type, assume it is a double
+const DataType = Object.freeze({
+    DOUBLE: "Double",
+    STRING: "String",
+    UNKNOWN: "Double"
+});
+
+// Assume a stream reads every 5 mins
+// (60/5)x24 = 288 readings per day
+// 2000/288 = ~7days
+const MAX_RECORDS_PER_STREAM = 2000;
+
+class Data {
     constructor() {
-        this.logs = [];
+        this.dataType = DataType.UNKNOWN;
+        this.timestampOfFirstRecord = new Date();
+        this.values = [];
+    }
 
-        this.pools = [];
+    addValue(value) {
 
-        this.stations = [];
+        const timestamp = new Date().toISOString();
+        if (typeof value === "boolean") {
+            value = value.toString();
+        }
+        this.values.push({ timestamp, value });
 
-        this.poolTags = [];
-
-        this.streamTags = [];
-
-        this.streamDataCount = 0;
-
-        this.uploadTs = Math.floor(+ new Date() / 1000);
-
-        // poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType
-        this.queue = [];
-
-        this.addToQueue = function (poolBody, poolName, streamName, poolTags, streamTags, valueObj, dataType) {
-            this.queue.push({ poolBody: poolBody, poolName: poolName, streamName: streamName, poolTags: poolTags, streamTags: streamTags, valueObj: valueObj, dataType: dataType });
+        // Ensure array does not exceed MAX_RECORDS_PER_STREAM
+        if (this.values.length > MAX_RECORDS_PER_STREAM) {
+            this.values.shift(); // Remove the oldest value
         }
 
-        this.getQueueAndClean = function () {
-            const result = this.queue;
-            this.queue = [];
-            return result;
+        // Set dataType based on the first entry
+        if (this.values.length === 1) {
+            this.timestampOfFirstRecord = new Date();
+            this.dataType = Data.checkDataType(value);
         }
+    }
 
-        this.getPoolTagsChanged = function (poolKey, tags) {
+    getFirstRecordTimestamp() {
+        return this.timestampOfFirstRecord;
+    }
 
-            if (poolKey && tags && poolKey !== null && tags !== null) {
-                let poolTags = this.poolTags.find(ele => ele.poolKey === poolKey);
-
-                if (!poolTags) return true;
-
-                if (tags.length > poolTags.tags.length) return true;
-
-                let difference = _.difference(tags, poolTags.tags);
-
-                if (difference.length > 0) {
-                    return true;
-                } else {
-                    return false;
-                }
-            } else {
-                return false;
-            }
+    static checkDataType(value) {
+        if (typeof value === "number") {
+            return DataType.DOUBLE;
+        } else if (typeof value === "string") {
+            return DataType.STRING;
+        } else if (typeof value === "boolean") {
+            return DataType.STRING;
+        } else {
+            return DataType.UNKNOWN;
         }
+    }
 
-        this.getStreamTagsChanged = function (streamKey, tags) {
+    getDataType() {
+        return this.dataType;
+    }
 
-            if (streamKey && tags && streamKey !== null && tags !== null) {
-                let streamTags = this.streamTags.find(ele => ele.streamKey === streamKey);
+    getAllValues() {
+        const allValues = this.values.map(val => ({
+            Ts: val.timestamp,
+            Val: this.dataType === DataType.DOUBLE ? val.value : null,
+            ValStr: this.dataType === DataType.STRING ? val.value : null,
+            Calculated: false
+        }));
+        this.values = [];
+        return allValues;
+    }
 
-                if (!streamTags) return true;
+    getSomeValues(count) {
+        const someValues = this.values.slice(0, count).map(val => ({
+            Ts: val.timestamp,
+            Val: this.dataType === DataType.DOUBLE ? val.value : null,
+            ValStr: this.dataType === DataType.STRING ? val.value : null,
+            Calculated: false
+        }));
+        this.values = this.values.slice(count);
+        return someValues;
+    }
 
-                if (tags.length > streamTags.tags.length) return true;
-
-                let difference = _.difference(tags, streamTags.tags);
-
-                if (difference.length > 0) {
-                    return true;
-                } else {
-                    return false;
-                }
-
-            } else {
-                return false;
-            }
-        }
-
-        this.updateStreamTags = function (key, tags) {
-            let that = this;
-            let streamExists = that.streamTags.findIndex(ele => ele.streamKey === key);
-
-            if (streamExists !== -1) {
-                let difference = _.difference(tags, that.streamTags[streamExists].tags);
-                if (difference.length > 0) {
-                    that.streamTags[streamExists].tags = that.streamTags[streamExists].tags.concat(difference);
-                }
-            } else {
-                that.streamTags.push({ streamKey: key, tags: tags })
-            }
-        }
-
-        this.addToStreamTags = function (res) {
-            let that = this;
-
-            if (res.Tags.length > 0) {
-                let streamExists = that.streamTags.findIndex(ele => ele.streamKey === res.Id);
-                if (streamExists !== -1) {
-                    that.streamTags[streamExists].tags = res.Tags;
-                } else if (streamExists === -1) {
-                    that.streamTags.push({ streamKey: res.Id, tags: res.Tags })
-                }
-            }
-        }
-
-        this.updatePoolTags = function (key, tags) {
-            let that = this;
-            let poolExists = that.poolTags.findIndex(ele => ele.poolKey === key);
-
-            if (poolExists !== -1) {
-                let difference = _.difference(tags, that.poolTags[poolExists].tags);
-                if (difference.length > 0) {
-                    that.poolTags[poolExists].tags = that.poolTags[poolExists].tags.concat(difference);
-                }
-            } else {
-                that.poolTags.push({ poolKey: key, tags: tags })
-            }
-        }
-
-        this.addToPoolTags = function (poolObj, res) {
-            let that = this;
-
-            if (res.Tags.length > 0) {
-                let poolExists = that.poolTags.findIndex(ele => ele.poolKey === res.Id);
-                if (poolExists !== -1) {
-                    that.poolTags[poolExists].tags = res.Tags;
-                } else if (poolExists === -1) {
-                    that.poolTags.push({ poolKey: res.Id, tags: res.Tags })
-                }
-            }
-        }
-
-        this.addStation = function (station) {
-            this.stations.push(station);
-        }
-
-        this.getStation = function (poolKey) {
-            return this.stations.find(station => station.poolKey === poolKey);
-        }
-
-        this.getLogs = function () {
-            return this.logs;
-        }
-
-        this.getLog = function (poolName, streamName) {
-            return this.logs.find(log => log.poolName === poolName && log.streamName === streamName);
-        }
-
-        this.getPool = function (poolName) {
-            //return this.pools.find(pool => pool.poolName === poolName && pool.PoolKey !== null);
-            return this.pools.find(pool => pool.poolName === poolName);
-        }
-
-        this.addPool = function (poolObject) {
-            this.pools.push(poolObject);
-        }
-
-        this.addToLogs = function (log) {
-            this.logs.push(log);
-            this.streamDataCount++;
-        }
-
-        this.updateLog = function (log, valueObj) {
-            let logIndex = this.logs.findIndex(ele => ele.poolName === log.poolName && ele.streamName === log.streamName);
-            this.logs[logIndex].values.push(valueObj);
-            this.logs[logIndex].valueCount++;
-            this.streamDataCount++;
+    delete() {
+        this.values = [];
+    }
+    static fromJSON(json) {
+        const data = new Data();
+        data.dataType = json.dataType;
+        data.values = json.values;
+        return data;
+    }
+    toJSON() {
+        return {
+            dataType: this.dataType,
+            values: this.values
         };
-
-        this.getUploadTs = function () {
-            return this.uploadTs;
-        };
-
-        this.getLogCount = function () {
-            return this.streamDataCount;
-        };
-
-        this.getBulkUploadData = function () {
-            let uploadData = [];
-            for (let i = 0; i < this.logs.length; i++) {
-                let log = this.logs[i];
-                //check for duplicate stream keys
-                let foundIndex = uploadData.findIndex(data => data.StreamKey == log.streamKey);
-                if (foundIndex === -1) {
-                    //not found, push to array
-                    uploadData.push({
-                        "StreamKey": log.streamKey,
-                        "Values": log.values
-                    });
-                } else {
-                    //found duplicate, add to values
-                    log.values.forEach(function (value) {
-                        uploadData[foundIndex].Values.push(value);
-                    });
-                }
-            }
-
-            return uploadData;
-        }
-
-        this.clearUploadedValues = function (count) {
-            for (let i = 0; i < this.logs.length; i++) {
-                this.logs[i].values = [];
-                this.logs[i].valueCount = 0;
-            }
-            this.streamDataCount = 0;
-            this.uploadTs = Math.floor(+ new Date() / 1000);
-        }
     }
 }
 
-module.exports = { Uploader };
+class Stream {
+    constructor(streamName = "", streamKey = "", streamTags = []) {
+        this.streamName = streamName;
+        this.streamKey = streamKey;
+        this.streamTags = streamTags;
+        this.data = new Data();
+    }
+    addData(value) {
+        this.data.addValue(value);
+        return {
+            count: this.data.values.length,
+            firstTs: this.data.getFirstRecordTimestamp()
+        }
+    }
+
+    getQueueDetails() {
+        return {
+            count: this.data.values.length,
+            firstTs: this.data.getFirstRecordTimestamp()
+        }
+    }
+    getData() {
+        return this.data;
+    }
+    getStreamKey() {
+        return this.streamKey || null;
+    }
+    getStreamName() {
+        return this.streamName || null;
+    }
+
+    updateTags(tags) {
+        this.streamTags = tags;
+    }
+    getStreamTags() {
+        return this.streamTags;
+    }
+    getDataType() {
+        return this.data.getDataType();
+    }
+    getAllValues() {
+        return this.data.getAllValues();
+    }
+    getSomeValues(count) {
+        return this.data.getSomeValues(count);
+    }
+    getRecordCount() {
+        return this.data.values.length || 0;
+    }
+    getFirstRecordTimestamp() {
+        return this.data.getFirstRecordTimestamp();
+    }
+
+    static fromJSON(json) {
+        const stream = new Stream();
+        stream.streamName = json.streamName;
+        stream.streamKey = json.streamKey;
+        stream.streamTags = json.streamTags;
+        stream.data = Data.fromJSON(json.data);
+        return stream;
+    }
+    toJSON() {
+        return {
+            streamName: this.streamName,
+            streamKey: this.streamKey,
+            streamTags: this.streamTags,
+            data: this.data.toJSON()
+        };
+    }
+}
+
+class Streams {
+    constructor() {
+        this.streams = new Map();
+        this.nameToKey = new Map();
+        this.keyToName = new Map();
+        this.countOfAllRecs = 0;
+    }
+
+    addStreamName(streamName) {
+        if (!streamName) {
+            throw new Error("Stream name cannot be empty");
+        }
+        if (this.streams.has(streamName) == false) {
+            this.streams.set(streamName, new Stream(streamName));
+        }
+    }
+    updateStreamKey(streamName, streamKey = null) {
+        if (!streamName) {
+            throw new Error("Stream name cannot be empty");
+        }
+        if (this.streams.has(streamName)) {
+            const existingStream = this.streams.get(streamName);
+            existingStream.streamKey = streamKey;
+            this.nameToKey.set(streamName, streamKey);
+            if (streamKey) {
+                this.keyToName.set(streamKey, streamName);
+            }
+        }
+    }
+
+    getCountOfAllRecords() {
+        let totalRecords = 0;
+        this.streams.forEach(stream => {
+            totalRecords += stream.getRecordCount();
+        });
+        this.countOfAllRecs = totalRecords;
+        return totalRecords;
+    }
+    getStreamByNameOrKey(identifier) {
+        if (!identifier) {
+            throw new Error("Identifier cannot be empty");
+        }
+        const isGuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(identifier);
+
+        if (isGuid) {
+            const streamName = this.keyToName.get(identifier);
+            return streamName ? this.streams.get(streamName) : null;
+        } else {
+            return this.streams.get(identifier) || null;
+        }
+    }
+    getStreamKeyList() {
+        return Array.from(this.nameToKey.values());
+    }
+    getStreamCount() {
+        return this.streams.size;
+    }
+    getStreamNameByKey(streamGuid) {
+        return this.keyToName.get(streamGuid) || null;
+    }
+    purgeRecordsOnly() {
+        this.streams.forEach(stream => {
+            stream.data.values = [];
+        });
+        this.countOfAllRecs = 0
+    }
+    updateStreamTags(streamName, tags) {
+        if (!streamName || !tags) {
+            throw new Error("Stream name and tags cannot be empty");
+        }
+        if (this.streams.has(streamName)) {
+            const existingStream = this.streams.get(streamName);
+            existingStream.streamTags = tags;
+        } else {
+            throw new Error("Stream not found");
+        }
+    }
+
+    getEarliestTimestamp() {
+        let earliestTimestamp = null;
+        this.streams.forEach(stream => {
+            const streamTimestamp = stream.getFirstRecordTimestamp();
+            if (earliestTimestamp === null || streamTimestamp < earliestTimestamp) {
+                earliestTimestamp = streamTimestamp;
+            }
+        });
+        return earliestTimestamp;
+    }
+    delete(streamName) {
+        this.streams.delete(streamName);
+    }
+
+    deleteValues(streamName) {
+        if (this.streams.has(streamName)) {
+            const existingStream = this.streams.get(streamName);
+            existingStream.data.values = []
+        }
+    }
+
+    static fromJSON(json) {
+        const streams = new Streams();
+        streams.countOfAllRecs = json.countOfAllRecs || 0;
+        streams.nameToKey = new Map(json.nameToKey);
+        streams.keyToName = new Map(json.keyToName);
+        streams.streams = new Map(Object.entries(json.streams).map(([key, value]) => [key, Stream.fromJSON(value)]));
+        return streams;
+    }
+
+    toJSON() {
+        const streamsObj = {};
+        this.streams.forEach((value, key) => {
+            streamsObj[key] = value.toJSON();
+        });
+        return {
+            countOfAllRecs: this.countOfAllRecs,
+            nameToKey: Array.from(this.nameToKey.entries()),
+            keyToName: Array.from(this.keyToName.entries()),
+            streams: streamsObj,
+        };
+    }
+}
+
+class Pool {
+    constructor() {
+        this.poolName = "";
+        this.poolKey = "";
+        this.stationId = "";
+        this.poolTags = [];
+        this.streams = new Streams();
+    }
+
+    setPoolName(poolName) {
+        this.poolName = poolName;
+    }
+    getPoolName() {
+        return this.poolName || null;
+    }
+
+    setPoolKey(poolKey) {
+        this.poolKey = poolKey;
+    }
+    getPoolKey() {
+        return this.poolKey || null;
+    }
+
+    setStationId(stationId) {
+        this.stationId = stationId;
+    }
+    getStationId() {
+        return this.stationId || null;
+    }
+
+    setPoolTags(poolTags) {
+        if (Array.isArray(poolTags)) {
+            this.poolTags = poolTags.map(tag => tag.trim());
+        } else {
+            throw new Error("Invalid input: poolTags must be a string or an array");
+        }
+    }
+    getStreamCount() {
+        return this.streams.getStreamCount();
+    }
+    getEarliestTimestamp() {
+        return this.streams.getEarliestTimestamp();
+    }
+    getCountOfAllRecords() {
+        return this.streams.getCountOfAllRecords();
+
+    }
+    getStreamNameByKey(streamGuid) {
+        return this.streams.getStreamNameByKey(streamGuid);
+    }
+    createTagListFromString(tags) {
+        return tags ? tags.split(/\s*,\s*/) : [];
+    }
+    purgeRecordsOnly() {
+        this.streams.purgeRecordsOnly();
+    }
+    cleanTags(tagStr) {
+        const cleanedTagList = tagStr.split(',');
+        return cleanedTagList.map(item => {
+            const equalIndex = item.indexOf('=');
+            if (equalIndex !== -1) {
+                const keyValue = item.substring(0, equalIndex).split(':').pop();
+                const value = item.substring(equalIndex + 1).trim();
+                return `${camelCase(keyValue.trim())}=${value}`;
+            }
+            return item;
+        });
+    }
+
+    findMissingTags(nodePoolTags, serverPoolTags) {
+        const missingTags = nodePoolTags.filter(tag => !serverPoolTags.includes(tag));
+        return missingTags.length > 0 ? missingTags : [];
+    }
+
+
+    addStreamName(streamName) {
+        this.streams.addStreamName(streamName);
+    }
+    updateStreamKey(streamName, streamKey = null) {
+        this.streams.updateStreamKey(streamName, streamKey);
+    }
+
+    getStreamByNameOrKey(identifier) {
+        return this.streams.getStreamByNameOrKey(identifier);
+    }
+
+    getStreamKeyList() {
+        return this.streams.getStreamKeyList();
+    }
+
+    updateStreamTags(streamName, tags) {
+        this.streams.updateStreamTags(streamName, tags);
+    }
+
+    deleteStream(streamName) {
+        this.streams.delete(streamName);
+    }
+
+    deleteStreamValues(streamName) {
+        this.streams.deleteValues(streamName);
+    }
+
+    stream(streamName) {
+        const stream = this.streams.getStreamByNameOrKey(streamName);
+        if (!stream) {
+            throw new Error("Stream not found");
+        }
+        return stream;
+    }
+
+    static fromJSON(json) {
+        const pool = new Pool();
+        pool.poolName = json.poolName;
+        pool.poolKey = json.poolKey;
+        pool.stationId = json.stationId;
+        pool.poolTags = json.poolTags;
+        pool.streams = Streams.fromJSON(json.streams);
+        return pool;
+    }
+
+    toJSON() {
+        return {
+            poolName: this.poolName,
+            poolKey: this.poolKey,
+            stationId: this.stationId,
+            poolTags: this.poolTags,
+            streams: this.streams.toJSON()
+        };
+    }
+}
+
+module.exports = { Pool };

@@ -1,13 +1,11 @@
 {
   "name": "@bitpoolos/edge-uploader",
-  "version": "1.0.19",
+  "version": "2.0.0",
   "description": "A Node-RED module to push data to Bitpool.",
   "dependencies": {
     "async-mutex": "^0.5.0",
     "axios": "^1.7.7",
     "camelcase": "^6.3.0",
-    "https": "1.0.0",
-    "toad-scheduler": "^3.0.1",
     "underscore": "^1.13.6"
   },
   "node-red": {

@@ -1,0 +1,75 @@
+[
+    {
+        "id": "b1a5ef0bdd0af47b",
+        "type": "debug",
+        "z": "35974cb78a6849d0",
+        "name": "Debug",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 770,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "16904cded652f885",
+        "type": "inject",
+        "z": "35974cb78a6849d0",
+        "name": "Upload Stream Record",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "stream name 1",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 800,
+        "wires": [
+            [
+                "4985eddfc26bd248"
+            ]
+        ]
+    },
+    {
+        "id": "4985eddfc26bd248",
+        "type": "uploader",
+        "z": "35974cb78a6849d0",
+        "name": "Bitpool Uploader",
+        "events": true,
+        "apiKey": "",
+        "pool_settings": "",
+        "stream_name": "",
+        "uploadCount": 100,
+        "uploadCountV2": 4,
+        "timeout": 10,
+        "uploadInterval": "900",
+        "uploadInterval_value": "15",
+        "uploadInterval_options": "Minutes",
+        "bpChkShowDateOnLabel": true,
+        "bpChkShowDebugWarnings": true,
+        "rebuildOnError": true,
+        "PoolTags": "",
+        "x": 570,
+        "y": 800,
+        "wires": [
+            [
+                "b1a5ef0bdd0af47b"
+            ]
+        ]
+    }
+]
