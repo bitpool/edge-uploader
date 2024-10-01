@@ -296,7 +296,7 @@ module.exports = function (RED) {
                 if (enqueuedStreamBlocks.length > 0 || purge) {
                     try {
                         const maxNumberOfStreamsPerBulkPost = DATA_UPLOAD_CHUNK_SIZE;
-                        for (let i = 0; i < enqueuedStreamBlocks.length; i += maxNumberOfStreamsPerBulkPost) {
+                        while (enqueuedStreamBlocks.length > 0) {
                             const chunk = enqueuedStreamBlocks.splice(0, maxNumberOfStreamsPerBulkPost);
                             const result = await postBulkStreamData(chunk);
                             if (!result) {
