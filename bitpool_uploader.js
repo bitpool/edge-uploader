@@ -5,7 +5,7 @@
 
 module.exports = function (RED) {
     const axios = require('axios');
-    const { Pool } = require("./uploader")
+    const { Pool, FileStorageCache } = require("./uploader")
     const os = require("os");
     const { Mutex } = require("async-mutex");
     const camelCase = require('camelcase');
@@ -16,14 +16,12 @@ module.exports = function (RED) {
     const { Agent } = require('https');
 
     const HTTP_TIMEOUT_SECS = 10;                   // Default HTTP session timeout in seconds
-    const HTTP_FAILURE_RETRY_COUNT = 1;             // Number of retries on HTTP call failure
-    const HTTP_FAILURE_RETRY_DELAY_SECS = 5;        // Delay between retries in seconds for HTTP calls
     const DATA_UPLOAD_INTERVAL_SECS = 60;           // Interval in seconds to check for data upload (default, configurable by user)
     const DATA_UPLOAD_COUNT = 4;                    // Threshold for record count to trigger data upload (default, configurable by user)
     const DATA_UPLOAD_CHUNK_SIZE = 10;              // Number of records to upload in a single batch
-    const ON_INIT_UPLOAD_DATA_AFTER_SECS = 60;      // Delay in seconds to upload data after a restart    
 
     const MEMORY_FILE_PATH_COMPRESSED = 'upload-config.json.gz';
+    const DATA_STORAGE_PATH = './bitpool-data';
     const APP_POLL_UI_SECS = 1;
     const APP_POLL_ENQUEUE_SECS = 1;
     const APP_POLL_DEQUEUE_SECS = 2;
@@ -56,9 +54,10 @@ module.exports = function (RED) {
         const timers = {};
         this.mutex = new Mutex();
         this.pool = new Pool();
+        this.fileCache = new FileStorageCache(DATA_STORAGE_PATH);
         this.rootUrlv2 = "https://api.bitpool.com/public/v2/";
         this.rootUrlv3 = "https://api.bitpool.com/public/v3/";
-        this.initComplete = true;
+        this.initComplete = false;
         this.PoolTags = config.PoolTags;
         this.lastUploadCheckTimeUI = new Date();
         this.lastUploadCheckTimeEnqueue = new Date();
@@ -76,193 +75,199 @@ module.exports = function (RED) {
         });
 
         async function initializeNode() {
-            let release = await node.mutex.acquire();
-            let doOnNewPoolCreation = true;
-
-            // Ensure all previous timers are stopped
             try {
-                stopAllTimers();
-            } catch (error) {
-                logError("Error stopping timers:", error.message || error);
-            }
+                let doOnNewPoolCreation = true;
 
-            try {
-                // If the configuration file does not exist, create it and save the default pool state
-                if (!fs.existsSync(configFileName)) {
-                    fs.writeFileSync(configFileName, '');
-                    await savePoolState();
+                // Ensure all previous timers are stopped
+                try {
+                    stopAllTimers();
+                } catch (error) {
+                    logError("Error stopping timers:", error.message || error);
                 }
 
                 try {
-                    const compressedData = fs.readFileSync(configFileName);
-                    const decompressed = await gunzip(compressedData);
-                    const restoredObject = JSON.parse(decompressed.toString());
-                    node.pool = Pool.fromJSON(restoredObject);
+                    // If the configuration file does not exist, create it and save the default pool state
+                    if (!fs.existsSync(configFileName)) {
+                        fs.writeFileSync(configFileName, '');
+                        await savePoolState();
+                    }
 
-                } catch (error) { }
-
-                updateStatusMsg({ fill: "green", shape: "dot", text: "Pool restored OK" });
-
-                // If the pool name has not changed, upload data
-                // This will happen when the user changes the config and publishes
-                if (pool_name == node.pool.getPoolName()) {
                     try {
-                        let streams = node.pool.getStreamKeyList();
-                        setTimeout(async () => {
-                            for (let index = 0; index < streams.length; index++) {
-                                const streamKey = streams[index];
-                                const stream = node.pool.getStreamByNameOrKey(streamKey);
-                                if (stream && stream.streamKey && stream.streamName) {
-                                    await enqueueStreamDataForUpload(stream.streamKey, stream.streamName);
+                        const compressedData = fs.readFileSync(configFileName);
+                        const decompressed = await gunzip(compressedData);
+                        const restoredObject = JSON.parse(decompressed.toString());
+                        node.pool = Pool.fromJSON(restoredObject);
+
+                    } catch (error) { }
+
+                    updateStatusMsg({ fill: "green", shape: "dot", text: "Pool restored OK" });
+
+                    // If the pool name has not changed, upload data
+                    // This will happen when the user changes the config and publishes
+                    if (pool_name == node.pool.getPoolName()) {
+                        doOnNewPoolCreation = false;
+                    }
+
+                } catch (error) {
+                    logError('Did not find stored pool state, will configure using defaults.');
+                }
+
+                if (bpChkShowDebugWarnings) {
+                    try {
+                        // Send the pool configuration to the debug window on startup                
+                        node.send({
+                            "payload": {
+                                "config": {
+                                    "api_key": apiKeyConfig.api_key,
+                                    "pool_name": pool_name,
+                                    "upload_on_record_count": uploadCount,
+                                    "upload_on_expired_secs": uploadIntervalSecs,
+                                    "http_timeout_secs": timeoutSecs,
+                                    "option_show_debug_warnings": bpChkShowDebugWarnings,
                                 }
                             }
-                        }, ON_INIT_UPLOAD_DATA_AFTER_SECS * 1000);
+                        });
                     } catch (error) {
-                        logError('Not found stored pool state, will configure using defaults.', error || error.message);
+                        logError('Failed to load configuration state.', error || error.message);
                     }
-                    doOnNewPoolCreation = false;
                 }
 
-            } catch (error) {
-                logError('Did not find stored pool state, will configure using defaults.');
-            }
-
-            try {
-                // Send the pool configuration to the debug window on startup                
-                node.send({
-                    "payload": {
-                        "config": {
-                            "api_key": apiKeyConfig.api_key,
-                            "pool_name": pool_name,
-                            "upload_on_record_count": uploadCount,
-                            "upload_on_expired_secs": uploadIntervalSecs,
-                            "http_timeout_secs": timeoutSecs,
-                            "option_show_debug_warnings": bpChkShowDebugWarnings,
-                        }
-                    }
-                });
-            } catch (error) {
-                logError('Failed to load configuration state.', error || error.message);
-            }
-
-            if (doOnNewPoolCreation) {
-                try {
-                    // Wait for the system to load, then set up the pool and station with tags
-                    setTimeout(async () => {
-                        node.pool = new Pool();
-
-                        // Create pool object
-                        node.pool.setPoolName(pool_name);
-
-                        // Add default tags and clean
-                        let defaultTags = [
-                            `operatingSystem=${os.version()}`,
-                            `nodejsVersion=${process.version}`,
-                            `nodeRedVersion=${RED.version()}`
-                        ];
-                        let poolTagsOnNode = node.pool.cleanTags(node.PoolTags + "," + defaultTags.join(','))
-
-                        // Get pool details from API
-                        let serverPool = await postAddUpdatePool(pool_name);
-                        if (serverPool.PoolKey && isValidGUID(serverPool.PoolKey)) {
-                            node.pool.setPoolKey(serverPool.PoolKey);
-                            await postAddPoolTags(serverPool.PoolKey, poolTagsOnNode);
-                            node.pool.setPoolTags(poolTagsOnNode);
-
-                            // Get station details from API
-                            let stationID = await postAddUpdateStation(serverPool.PoolKey, pool_name);
-                            node.pool.setStationId(stationID)
-
-                            await savePoolState();
-                            updateStatusMsg({ fill: "green", shape: "dot", text: "Pool initialised OK" });
-
-                            node.initComplete = true;
-                        } else {
-                            logWarn("Error initializing:", error.message || error);
-                            node.status({ fill: "red", shape: "ring", text: "Error initializing" });
-                        }
-
-                    }, 1);
-                } catch (error) {
-                    logError("Error initializing:", error.message || error);
-                    node.status({ fill: "red", shape: "ring", text: "Error initializing" });
-                }
-            }
-
-            // Send the pool object to the debug window on startup 
-            node.send({
-                "payload": {
-                    "pool": node.pool
-                }
-            });
-
-            // Set up timer to update the UI
-            clearInterval(timerCheckUI);
-            if (timerCheckUI === null) {
-                timers.uiTimer = setInterval(async () => {
+                if (doOnNewPoolCreation) {
                     try {
-                        const streamCount = node.pool.getStreamCount();
-                        const totalPoolRecordCount = node.pool.getCountOfAllRecords();
-                        const avgRecordsPerStream = Math.floor(totalPoolRecordCount / streamCount) || 0;
-                        node.avgCountRecordsForAllStreams = avgRecordsPerStream;
+                        // Wait for the system to load, then set up the pool and station with tags
+                        setTimeout(async () => {
+                            node.pool = new Pool();
+
+                            // Create pool object
+                            node.pool.setPoolName(pool_name);
+
+                            // Add default tags and clean
+                            let defaultTags = [
+                                `operatingSystem=${os.version()}`,
+                                `nodejsVersion=${process.version}`,
+                                `nodeRedVersion=${RED.version()}`
+                            ];
+                            let poolTagsOnNode = node.pool.cleanTags(node.PoolTags + "," + defaultTags.join(','))
+
+                            // Get pool details from API
+                            let serverPool = await postAddUpdatePool(pool_name);
+                            if (serverPool.PoolKey && isValidGUID(serverPool.PoolKey)) {
+                                node.pool.setPoolKey(serverPool.PoolKey);
+                                await postAddPoolTags(serverPool.PoolKey, poolTagsOnNode);
+                                node.pool.setPoolTags(poolTagsOnNode);
+
+                                // Get station details from API
+                                let stationID = await postAddUpdateStation(serverPool.PoolKey, pool_name);
+                                node.pool.setStationId(stationID)
+
+                                await savePoolState();
+                                updateStatusMsg({ fill: "green", shape: "dot", text: "Pool initialised OK" });
+
+
+                            } else {
+                                logWarn("Error initializing:", error.message || error);
+                                node.status({ fill: "red", shape: "ring", text: "Error initializing" });
+                            }
+
+                        }, 1);
+                    } catch (error) {
+                        logError("Error initializing:", error.message || error);
+                        node.status({ fill: "red", shape: "ring", text: "Error initializing" });
+                    }
+                }
+
+                if (bpChkShowDebugWarnings) {
+                    // Send the pool object to the debug window on startup 
+                    node.send({
+                        "payload": {
+                            "pool": node.pool
+                        }
+                    });
+                }
+
+                // Set up timer to update the UI
+                clearInterval(timerCheckUI);
+                if (timerCheckUI === null) {
+                    timers.uiTimer = setInterval(async () => {
+                        try {
+                            const streamCount = node.pool.getStreamCount();
+                            const totalPoolRecordCount = node.pool.getCountOfAllRecords();
+                            const avgRecordsPerStream = Math.floor(totalPoolRecordCount / streamCount) || 0;
+                            node.avgCountRecordsForAllStreams = avgRecordsPerStream;
+
+                            const now = new Date();
+                            const elapsedSeconds = Math.floor((now - node.lastUploadCheckTimeUI) / 1000);
+                            const remainingSeconds = uploadIntervalSecs - elapsedSeconds;
+                            const cacheSize = node.fileCache.getSize()
+
+                            if (remainingSeconds < 0) {
+                                node.lastUploadCheckTimeUI = now;
+
+                            } else {
+                                const formattedTime = formatDateToDdHhMmSs(remainingSeconds);
+                                let message = `In:(${totalPoolRecordCount}) Out:(${enqueuedStreamBlocks.length}) Limit:(${avgRecordsPerStream}/${uploadCount}) Time:(${formattedTime})`;
+                                if (cacheSize > 0) {
+                                    const storedKeys = node.fileCache.listStoredKeys();
+                                    const countPoolCachedStreams = Array.from(storedKeys).reduce((count, [key]) => {
+                                        return count + (node.pool.hasStreamKey(key) ? 1 : 0);
+                                    }, 0);
+
+                                    if (countPoolCachedStreams > 0) {
+                                        message = `In:(${totalPoolRecordCount}) Out:(${enqueuedStreamBlocks.length}) Limit:(${avgRecordsPerStream}/${uploadCount}) Time:(${formattedTime}) Cached:(${countPoolCachedStreams})`;
+                                    }
+                                }
+
+                                updateStatusMsg({ fill: "blue", shape: "dot", text: message });
+                            }
+
+                        } catch (error) {
+                            logError("Error in Timer:", error.message || error);
+                        }
+                    }, APP_POLL_UI_SECS * 1000);
+                } else {
+                    logWarn("At initializeNode(), the upload timer is already running!");
+                }
+
+                // Set up timer to enqueue data
+                clearInterval(timerEnqueue);
+                if (timerEnqueue === null) {
+                    timers.enqueueTimer = setInterval(async () => {
 
                         const now = new Date();
-                        const elapsedSeconds = Math.floor((now - node.lastUploadCheckTimeUI) / 1000);
+                        const elapsedSeconds = Math.floor((now - node.lastUploadCheckTimeEnqueue) / 1000);
                         const remainingSeconds = uploadIntervalSecs - elapsedSeconds;
 
                         if (remainingSeconds < 0) {
-                            node.lastUploadCheckTimeUI = now;
+                            await pushDataToUploadQueue(true);
+                            node.lastUploadCheckTimeEnqueue = now;
 
-                        } else {
-                            const formattedTime = formatDateToDdHhMmSs(remainingSeconds);
-                            const message = `In:(${totalPoolRecordCount}) Out:(${enqueuedStreamBlocks.length}) Limit:(${avgRecordsPerStream}/${uploadCount}) Time:(${formattedTime})`;
-                            updateStatusMsg({ fill: "blue", shape: "dot", text: message });
+                        }
+                        if (node.avgCountRecordsForAllStreams >= uploadCount) {
+                            if (node.pool.getCountOfAllRecords() >= node.avgCountRecordsForAllStreams) {
+                                await pushDataToUploadQueue(false);
+                            }
                         }
 
-                    } catch (error) {
-                        logError("Error in Timer:", error.message || error);
-                    }
-                }, APP_POLL_UI_SECS * 1000);
-            } else {
-                logWarn("At initializeNode(), the upload timer is already running!");
+                    }, APP_POLL_ENQUEUE_SECS * 1000);
+                } else {
+                    logWarn("At initializeNode(), the upload timer is already running!");
+                }
+
+                // Set up timer to dequeue data
+                clearInterval(timerDequeue);
+                if (timerDequeue === null) {
+                    timers.dequeueTimer = setInterval(async () => {
+                        await uploadQueuedDataNow();
+                    }, APP_POLL_DEQUEUE_SECS * 1000);
+                } else {
+                    logWarn("At initializeNode(), the upload timer is already running!");
+                }
+
+            } catch (error) {
+                logError("Error on initialise:", error.message || error);
+            } finally {
+                node.initComplete = true;
             }
-
-            // Set up timer to enqueue data
-            clearInterval(timerEnqueue);
-            if (timerEnqueue === null) {
-                timers.enqueueTimer = setInterval(async () => {
-
-                    const now = new Date();
-                    const elapsedSeconds = Math.floor((now - node.lastUploadCheckTimeEnqueue) / 1000);
-                    const remainingSeconds = uploadIntervalSecs - elapsedSeconds;
-
-                    if (remainingSeconds < 0) {
-                        await pushDataToUploadQueue(true);
-                        node.lastUploadCheckTimeEnqueue = now;
-
-                    }
-                    if (node.avgCountRecordsForAllStreams >= uploadCount) {
-                        if (node.pool.getCountOfAllRecords() >= node.avgCountRecordsForAllStreams) {
-                            await pushDataToUploadQueue(false);
-                        }
-                    }
-
-                }, APP_POLL_ENQUEUE_SECS * 1000);
-            } else {
-                logWarn("At initializeNode(), the upload timer is already running!");
-            }
-
-            // Set up timer to dequeue data
-            clearInterval(timerDequeue);
-            if (timerDequeue === null) {
-                timers.dequeueTimer = setInterval(async () => {
-                    await uploadQueuedDataNow();
-                }, APP_POLL_DEQUEUE_SECS * 1000);
-            } else {
-                logWarn("At initializeNode(), the upload timer is already running!");
-            }
-
-            release();
         }
 
         // Initialize the node to build the pool and station
@@ -315,109 +320,145 @@ module.exports = function (RED) {
         }
 
         node.on('input', async function (msg, send, done) {
-            let release = await node.mutex.acquire();
-            try {
-                if (msg.BPCommand == "REBUILD") {
-                    logInfo("The command REBUILD is no longer supported (use CREATE_CONFIG). Note, CREATE_CONFIG will delete all exsiting configuration data.")
 
-                } else if (msg.BPCommand == "SHOW_CONFIG") {    // ----------------------------------------------
-                    send({
-                        "payload": {
-                            "config": {
-                                "api_key": apiKeyConfig.api_key,
-                                "pool_name": pool_name,
-                                "upload_on_record_count": uploadCount,
-                                "upload_on_expired_secs": uploadIntervalSecs,
-                                "http_timeout_secs": timeoutSecs,
-                                "option_show_debug_warnings": bpChkShowDebugWarnings,
-                            }
-                        }
-                    });
+            if (node.initComplete) {
 
-                } else if (msg.BPCommand == "SHOW_POOL") {      // ----------------------------------------------
-                    send({
-                        "payload": {
-                            "pool": node.pool
-                        }
-                    });
+                try {
+                    if (msg.BPCommand == "REBUILD") {
+                        logInfo("The command REBUILD is no longer supported (use CREATE_CONFIG). Note, CREATE_CONFIG will delete all exsiting configuration data.")
 
-                } else if (msg.BPCommand == "CREATE_POOL") {    // ----------------------------------------------
-                    this.pool = new Pool();
-                    if (fs.existsSync(configFileName)) {
-                        fs.unlinkSync(configFileName);
-                    }
-                    release();
-                    initializeNode();
-                    const poolName = node.pool.getPoolName();
-                    if (poolName) {
-                        logInfo(`Rebuilt the pool (${poolName}) model for this node.`);
-                    } else {
-                        logInfo(`Rebuilt default model for this node.`);
-                    }
-
-                } else if (msg.BPCommand == "SAVE_POOL") {      // ----------------------------------------------
-                    await savePoolState();
-                    logInfo(`Saved the pool (${node.pool.getPoolName()}) model for this node.`);
-
-                } else if (msg.BPCommand == "PURGE_DATA") {     // ----------------------------------------------
-                    node.pool.purgeRecordsOnly();
-                    logInfo(`Purged all record data stored on this pool (${node.pool.getPoolName()}) node.`);
-
-
-                } else if (msg.BPCommand == "UPLOAD_DATA") {    // ----------------------------------------------
-                    try {
-                        await pushDataToUploadQueue(true);
-                        await uploadQueuedDataNow(true);
-                        logInfo(`Uploaded all record data stored on this pool (${node.pool.getPoolName()}) node.`);
-
-                    } catch (error) {
-                        logError('Did not find stored pool configuration, will configure using defaults.', error || error.message);
-                    }
-
-                } else {
-                    if (msg.topic && msg.topic.trim() !== "") {
-                        if (this.initComplete) {
-                            let streamName = msg.topic;
-
-                            node.pool.addStreamName(streamName);
-
-                            // Critical - Add data first to determine the data type, which is required by the stream add function                            
-                            node.pool.stream(streamName).addData(msg.payload);
-                            let streamKey = node.pool.getStreamByNameOrKey(streamName).getStreamKey();
-
-                            if (!streamKey) {
-                                let poolKey = node.pool.getPoolKey();
-                                let stationId = node.pool.getStationId();
-                                let dataType = node.pool.getStreamByNameOrKey(streamName).getDataType();
-                                let stream = await postAddUpdateStream(poolKey, stationId, streamName, dataType);
-
-                                node.pool.updateStreamKey(streamName, stream.StreamKey);
-
-                                let streamTags = msg.meta?.split(/\s*,\s*/) || null;
-                                if (streamTags) {
-                                    streamTags = _removeNameSpacePrefix(streamTags);
-                                    streamTags = [...new Set(streamTags)];
+                    } else if (msg.BPCommand == "SHOW_CONFIG") {    // ----------------------------------------------
+                        send({
+                            "payload": {
+                                "config": {
+                                    "api_key": apiKeyConfig.api_key,
+                                    "pool_name": pool_name,
+                                    "upload_on_record_count": uploadCount,
+                                    "upload_on_expired_secs": uploadIntervalSecs,
+                                    "http_timeout_secs": timeoutSecs,
+                                    "option_show_debug_warnings": bpChkShowDebugWarnings,
                                 }
-
-                                node.pool.stream(streamName).updateTags(streamTags);
-                                await postAddStreamTags(stream.StreamKey, streamTags)
                             }
+                        });
+                    } else if (msg.BPCommand == "SHOW_POOL") {      // ----------------------------------------------
+                        send({
+                            "payload": {
+                                "pool": node.pool
+                            }
+                        });
+                    } else if (msg.BPCommand == "SHOW_CACHE") {      // ----------------------------------------------
 
+                        const storedKeys = this.fileCache.listStoredKeys();
+                        if (storedKeys && storedKeys.size > 0) {
+                            let foundAnEntry = false
+                            for (const [key, value] of storedKeys) {
+                                try {
+                                    if (this.fileCache.streamKeyExists(key)) {
+                                        let dataType = node.pool.getStreamByNameOrKey(key).getDataType();
+                                        if (dataType) {
+                                            const dataEntries = await this.fileCache.retrieveData(key, dataType);
+                                            node.send({
+                                                "payload": {
+                                                    "key": key,
+                                                    "data": dataEntries
+                                                }
+                                            });
+                                            foundAnEntry = true
+                                        }
+                                    }
+                                } catch (error) { }
+                            }
+                            if (!foundAnEntry) {
+                                logInfo(`Did not find cached data for this pool.`);
+                            }
                         } else {
-                            updateStatusMsg({ fill: "red", shape: "dot", text: "Pool not initialised" });
+                            logInfo(`There are no stored cached records.`);
                         }
+
+
+                    } else if (msg.BPCommand == "CREATE_POOL") {    // ----------------------------------------------
+                        this.pool = new Pool();
+                        if (fs.existsSync(configFileName)) {
+                            fs.unlinkSync(configFileName);
+                        }
+                        node.initComplete = false;
+                        initializeNode();
+                        const poolName = node.pool.getPoolName();
+                        if (poolName) {
+                            logInfo(`Rebuilt the pool (${poolName}) model for this node.`);
+                        } else {
+                            logInfo(`Rebuilt default model for this node.`);
+                        }
+
+                    } else if (msg.BPCommand == "SAVE_POOL") {      // ----------------------------------------------
+                        await savePoolState();
+                        logInfo(`Saved the pool (${node.pool.getPoolName()}) model for this node.`);
+
+                    } else if (msg.BPCommand == "PURGE_DATA") {     // ----------------------------------------------
+                        node.pool.purgeRecordsOnly();
+                        logInfo(`Purged all record data stored on this pool (${node.pool.getPoolName()}) node.`);
+
+                    } else if (msg.BPCommand == "UPLOAD_DATA") {    // ----------------------------------------------
+                        try {
+                            await pushDataToUploadQueue(true);
+                            await uploadQueuedDataNow(true);
+                            logInfo(`Uploaded all record data stored on this pool (${node.pool.getPoolName()}) node.`);
+
+                        } catch (error) {
+                            logError('Did not find stored pool configuration, will configure using defaults.', error || error.message);
+                        }
+
                     } else {
-                        logWarn("Input topic is empty, skipping...");
+                        if (msg.topic && msg.topic.trim() !== "") {
+                            if (this.initComplete) {
+                                let streamName = msg.topic;
+
+                                node.pool.addStreamName(streamName);
+
+                                // Critical - Add data first to determine the data type, which is required by the stream add function                            
+                                node.pool.stream(streamName).addData(msg.payload);
+                                let streamKey = node.pool.getStreamByNameOrKey(streamName).getStreamKey();
+
+                                if (!streamKey) {
+                                    let release = await node.mutex.acquire();
+                                    try {
+                                        let poolKey = node.pool.getPoolKey();
+                                        let stationId = node.pool.getStationId();
+                                        let dataType = node.pool.getStreamByNameOrKey(streamName).getDataType();
+                                        let stream = await postAddUpdateStream(poolKey, stationId, streamName, dataType);
+
+                                        node.pool.updateStreamKey(streamName, stream.StreamKey);
+
+                                        let streamTags = msg.meta?.split(/\s*,\s*/) || null;
+                                        if (streamTags) {
+                                            streamTags = _removeNameSpacePrefix(streamTags);
+                                            streamTags = [...new Set(streamTags)];
+                                        }
+
+                                        node.pool.stream(streamName).updateTags(streamTags);
+                                        await postAddStreamTags(stream.StreamKey, streamTags)
+                                    } catch (error) { }
+                                    finally {
+                                        release();
+                                    }
+                                }
+                            } else {
+                                updateStatusMsg({ fill: "red", shape: "dot", text: "Pool not initialised" });
+                            }
+                        } else {
+                            logWarn("Input topic is empty, skipping...");
+                        }
+                    }
+                } catch (error) {
+                    logError("Error on input:", error.message || error);
+                }
+                finally {
+                    if (done) {
+                        done();
                     }
                 }
-            } catch (error) {
-                logError("Error on input:", error.message || error);
-            }
-            finally {
-                release();
-                if (done) {
-                    done();
-                }
+            } else {
+                // ignore incoming events until init complete
             }
         });
 
@@ -575,37 +616,37 @@ module.exports = function (RED) {
         }
 
         async function postBulkStreamData(enqueuedStreamBlocks) {
-            const retryCount = HTTP_FAILURE_RETRY_COUNT;
-            const retryDelay = HTTP_FAILURE_RETRY_DELAY_SECS * 1000;
             const maxConcurrentRequests = DATA_UPLOAD_CHUNK_SIZE;
 
-            async function uploadWithRetry(pair, retries) {
+            async function uploadBlock(pair) {
                 let body = JSON.stringify(pair.data);
-                let attempt = 0;
-                while (attempt < retries) {
-                    const uri = `${node.rootUrlv2}streams/${pair.streamKey}/logs`;
-                    try {
-                        const res = await axiosInstance.post(uri, body);
-                        if (res.status === 200) {
-                            return true;
-                        } else {
-                            const text = res.data ? JSON.stringify(res.data) : "No response";
-                            logWarn("Error uploading to server: ", `${res.status}: ${text}`);
-                            throw new Error(`Error uploading to api server: ${res.status}`);
-                        }
-                    } catch (error) {
+                const uri = `${node.rootUrlv2}streams/${pair.streamKey}/logs`;
+                try {
 
-                        logError(`Error uploading to the server: ${uri}`, error.message || error);
-                        attempt++;
-                        if (attempt < retries) {
-                            const backoffDelay = retryDelay * Math.pow(2, attempt); // Exponential backoff
-                            logWarn(`Retrying in ${backoffDelay / 1000} seconds.`);
-                            await new Promise(resolve => setTimeout(resolve, backoffDelay));
-                        } else {
-                            logWarn(`Max retries reached. Uploading failed: ${uri}`);
-                            throw error;
+                    // Check to see if any no set records in the cache for this stream
+                    try {
+                        if (node.fileCache.streamKeyExists(pair.streamKey)) {
+                            let dataType = node.pool.getStreamByNameOrKey(pair.streamKey).getDataType();
+                            if (dataType) {
+                                const cachedData = await node.fileCache.retrieveData(pair.streamKey, dataType);
+                                let cachedBody = JSON.stringify(cachedData);
+                                const resCached = await axiosInstance.post(uri, cachedBody);
+                                if (resCached.status === 200) {
+                                    node.fileCache.deleteFile(pair.streamKey)
+                                }
+                            }
                         }
+                    } catch (error) { }
+
+                    const res = await axiosInstance.post(uri, body);
+                    if (res.status === 200) {
+                        return;
+                    } else {
+                        throw new Error(`Error uploading to api server: ${res.status}`);
                     }
+
+                } catch (error) {
+                    await node.fileCache.appendData(pair.streamKey, pair.data);
                 }
             }
 
@@ -613,18 +654,19 @@ module.exports = function (RED) {
                 const promises = [];
                 for (let i = 0; i < enqueuedStreamBlocks.length; i += maxConcurrentRequests) {
                     const chunk = enqueuedStreamBlocks.slice(i, i + maxConcurrentRequests);
-                    const chunkPromises = chunk.map(pair => uploadWithRetry(pair, retryCount));
+                    const chunkPromises = chunk.map(pair => uploadBlock(pair));
                     promises.push(...chunkPromises);
-                    await Promise.all(chunkPromises); // Wait for the current batch to complete
+                    await Promise.all(chunkPromises);
                 }
                 await Promise.all(promises);
                 return true;
+
             } catch (error) {
                 logError("Error posting bulk data: ", error.message || error);
                 throw error;
+
             }
         }
-
 
         // Helper Functions------------------------------------------------------------------------------------------------------------------------------
         function stopAllTimers() {
@@ -674,7 +716,9 @@ module.exports = function (RED) {
             }
         }
         function logInfo(param1) {
-            node.warn(`INFO: ${param1}`)
+            if (bpChkShowDebugWarnings) {
+                node.warn(`INFO: ${param1}`)
+            }
         }
         function _removeNameSpacePrefix(tags) {
             for (let index = 0; index < tags.length; index++) {

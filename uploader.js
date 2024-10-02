@@ -5,6 +5,8 @@
 
 const _ = require("underscore");
 const camelCase = require('camelcase');
+const fs = require('fs');
+const path = require('path');
 
 // If we have not worked out the data type, assume it is a double
 const DataType = Object.freeze({
@@ -17,31 +19,44 @@ const DataType = Object.freeze({
 // (60/5)x24 = 288 readings per day
 // 2000/288 = ~7days
 const MAX_RECORDS_PER_STREAM = 2000;
+const MAX_UNIQUE_TIMESTAMPS = 10;
 
 class Data {
     constructor() {
         this.dataType = DataType.UNKNOWN;
         this.timestampOfFirstRecord = new Date();
         this.values = [];
+        this.timestamps = new Set(); // Track existing timestamps        
     }
 
     addValue(value) {
-
-        const timestamp = new Date().toISOString();
+        // Round to the nearset second
+        const timestamp = new Date().toISOString().split('.')[0] + 'Z';
         if (typeof value === "boolean") {
             value = value.toString();
         }
-        this.values.push({ timestamp, value });
 
-        // Ensure array does not exceed MAX_RECORDS_PER_STREAM
-        if (this.values.length > MAX_RECORDS_PER_STREAM) {
-            this.values.shift(); // Remove the oldest value
-        }
+        if (!this.timestamps.has(timestamp)) {
+            // Add the new value
+            this.values.push({ timestamp, value });
+            this.timestamps.add(timestamp); // Add to the set
 
-        // Set dataType based on the first entry
-        if (this.values.length === 1) {
-            this.timestampOfFirstRecord = new Date();
-            this.dataType = Data.checkDataType(value);
+            // Ensure array does not exceed MAX_RECORDS_PER_STREAM - delete the oldest
+            if (this.values.length > MAX_RECORDS_PER_STREAM) {
+                this.values.shift();
+            }
+
+            // Keep a list of the last x inserted timestamps
+            if (this.timestamps.size > MAX_UNIQUE_TIMESTAMPS) {
+                const oldestTimestamp = Array.from(this.timestamps).shift();
+                this.timestamps.delete(oldestTimestamp);
+            }
+
+            // Set dataType based on the first entry
+            if (this.values.length === 1) {
+                this.timestampOfFirstRecord = new Date();
+                this.dataType = Data.checkDataType(value);
+            }
         }
     }
 
@@ -204,6 +219,9 @@ class Streams {
             }
         }
     }
+    hasStreamKey(streamKey) {
+        return this.keyToName.has(streamKey);
+    }
 
     getCountOfAllRecords() {
         let totalRecords = 0;
@@ -213,10 +231,12 @@ class Streams {
         this.countOfAllRecs = totalRecords;
         return totalRecords;
     }
+
     getStreamByNameOrKey(identifier) {
         if (!identifier) {
-            throw new Error("Identifier cannot be empty");
+            throw new Error("Stream name/key cannot be empty");
         }
+
         const isGuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(identifier);
 
         if (isGuid) {
@@ -334,6 +354,9 @@ class Pool {
             throw new Error("Invalid input: poolTags must be a string or an array");
         }
     }
+    hasStreamKey(streamKey) {
+        return this.streams.hasStreamKey(streamKey);
+    }
     getStreamCount() {
         return this.streams.getStreamCount();
     }
@@ -342,7 +365,6 @@ class Pool {
     }
     getCountOfAllRecords() {
         return this.streams.getCountOfAllRecords();
-
     }
     getStreamNameByKey(streamGuid) {
         return this.streams.getStreamNameByKey(streamGuid);
@@ -428,4 +450,186 @@ class Pool {
     }
 }
 
-module.exports = { Pool };
+
+class FileStorageCache {
+
+    constructor(storagePath) {
+        this.streamKeyPath = new Map();
+        this.storagePath = storagePath;
+        if (!fs.existsSync(this.storagePath)) {
+            fs.mkdirSync(this.storagePath, { recursive: true });
+        }
+        this.loadExistingFiles();
+    }
+
+    loadExistingFiles() {
+        try {
+            const files = fs.readdirSync(this.storagePath);
+            // Filter for only .bin files
+            const binFiles = files.filter(file => file.endsWith('.bin'));
+            if (binFiles && binFiles.length > 0) {
+                binFiles.forEach(file => {
+                    const streamKey = path.basename(file, '.bin');
+                    const filePath = path.join(this.storagePath, file);
+                    this.streamKeyPath.set(streamKey, filePath);
+                });
+            }
+        } catch (e) { }
+    }
+    getSize() {
+        return this.streamKeyPath.size;
+    }
+    listStoredKeys() {
+        if (this.streamKeyPath.size === 0) {
+            return null;
+        }
+        return this.streamKeyPath;
+    }
+
+    async appendData(streamKey, dataArray) {
+        let filePath = null;
+        let writeStream = null;
+
+        try {
+            if (this.streamKeyPath.has(streamKey)) {
+                filePath = this.streamKeyPath.get(streamKey);
+
+                if (!fs.existsSync(filePath)) {
+                    return false;
+                }
+            } else {
+                filePath = path.join(this.storagePath, `${streamKey}.bin`);
+                this.streamKeyPath.set(streamKey, filePath);
+            }
+
+            writeStream = fs.createWriteStream(filePath, { flags: 'a' });
+
+            // Loop the bitpool data array
+            dataArray.forEach(data => {
+                try {
+                    if (data.Val !== null && data.Val !== undefined) {
+                        // Store timestamp and data as 64-bit floats (doubles)
+                        const buffer = Buffer.allocUnsafe(16);                  // 8 bytes for timestamp, 8 bytes for data
+                        buffer.writeDoubleBE(new Date(data.Ts).getTime(), 0);   // Write the timestamp (first 8 bytes) - input is ISO string
+                        buffer.writeDoubleBE(data.Val, 8);                      // Write the number (next 8 bytes)
+                        writeStream.write(buffer);                              // Write the buffer to the stream
+                    } else if (data.ValStr !== null && data.ValStr !== undefined) {
+                        // Store the timestamp and string (null-terminated)
+                        const stringBuffer = Buffer.from(data.ValStr, 'utf8');  // Convert the string to a buffer
+                        const nullTerminator = Buffer.from([0]);                // Null terminator (\0)
+                        const timestampBuffer = Buffer.allocUnsafe(8);          // 8 bytes for timestamp
+                        timestampBuffer.writeDoubleBE(new Date(data.Ts).getTime(), 0);
+
+                        // Concat and write the buffers (timestamp + string + null terminator)
+                        const totalBuffer = Buffer.concat([timestampBuffer, stringBuffer, nullTerminator]);
+                        writeStream.write(totalBuffer);
+                    }
+                } catch (e) { }
+            });
+
+        } catch (e) {
+            return false
+
+        } finally {
+            if (writeStream !== null && writeStream !== undefined) {
+                await new Promise(resolve => writeStream.end(resolve)); // Ensure the stream is properly closed
+            }
+        }
+        return true
+    }
+    async retrieveData(streamKey, dataType) {
+        let fileHandle = null;
+        let dataEntries = [];
+
+        try {
+            if (this.streamKeyPath.has(streamKey)) {
+                // If exist then use the path
+                const filePath = this.streamKeyPath.get(streamKey);
+                fileHandle = await fs.promises.open(filePath, 'r');
+                let fileData = await fileHandle.readFile();
+                let offset = 0;
+
+                while (offset < fileData.length) {
+                    try {
+                        // Read the timestamp (always 8 bytes)
+                        let timestamp = fileData.readDoubleBE(offset);
+                        let dataString = null;
+                        let dataNumber = null;
+                        offset += 8;
+                        if (dataType === DataType.DOUBLE) {
+                            // Timestamp and data as 64-bit floats (doubles)
+                            dataNumber = fileData.readDoubleBE(offset);
+                            offset += 8;
+                        } else if (dataType === DataType.STRING) {
+                            // Find the null terminator for the string
+                            const nullIndex = fileData.indexOf(0, offset);
+                            if (nullIndex === -1) break; // No null terminator found, break the loop
+                            // Extract the string (everything from offset to nullIndex)
+                            dataString = fileData.subarray(offset, nullIndex).toString('utf8');
+                            offset = nullIndex + 1; // Move past the null terminator
+                        } else {
+                            continue;
+                        }
+
+                        dataEntries.push({
+                            Ts: new Date(timestamp).toISOString(),
+                            Val: dataType === DataType.DOUBLE ? dataNumber : null,
+                            ValStr: dataType === DataType.STRING ? dataString : null,
+                            Calculated: false
+                        });
+
+                    } catch (e) { }
+                }
+            }
+        } catch (e) {
+        } finally {
+            if (fileHandle !== null) {
+                await fileHandle.close();
+            }
+        }
+        return dataEntries;
+    }
+
+    streamKeyExists(streamKey) {
+        if (this.streamKeyPath.has(streamKey)) {
+            const filePath = this.streamKeyPath.get(streamKey);
+
+            if (fs.existsSync(filePath)) {
+                return true;
+            } else {
+                this.streamKeyPath.delete(filePath);
+                return false;
+            }
+        } else {
+            // The map does not have an entry for this key but the file exist? So create one
+            const filePath = path.join(this.storagePath, `${streamKey}.bin`);
+            if (fs.existsSync(filePath)) {
+                this.streamKeyPath.set(streamKey, filePath);
+                return true;
+            } else {
+                return false;
+            }
+        }
+    }
+
+    deleteFile(streamKey) {
+        try {
+            if (this.streamKeyPath.has(streamKey)) {
+                const filePath = this.streamKeyPath.get(streamKey);
+
+                if (fs.existsSync(filePath)) {
+                    fs.unlink(filePath, (err) => {
+                        if (!err) {
+                            this.streamKeyPath.delete(streamKey);
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            return false
+        }
+        return true;
+    }
+}
+
+module.exports = { Pool, FileStorageCache };
