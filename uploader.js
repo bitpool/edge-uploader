@@ -451,6 +451,14 @@ class Pool {
 }
 
 
+// Worked example if data store in numeric (8b) with timestamp (8b)
+// where; 1 record = 16 bytes. Max file size 30K bytes
+//      => 30Kb/16b = 1920 records  
+//      => 1920 recs / 12 / 60 = 160hrs (or 7 days) at 5 minute logging
+
+const MAX_FILE_SIZE_BYTES = 30 * 1024;                       // 30 KB (in bytes) 
+const MAX_FILE_AGE_MILLI_SECS = 30 * 24 * 60 * 60 * 1000;    // 30 days (in milliseconds)
+
 class FileStorageCache {
 
     constructor(storagePath) {
@@ -459,23 +467,38 @@ class FileStorageCache {
         if (!fs.existsSync(this.storagePath)) {
             fs.mkdirSync(this.storagePath, { recursive: true });
         }
-        this.loadExistingFiles();
+        this.loadFiles();
     }
 
-    loadExistingFiles() {
+    loadFiles() {
         try {
             const files = fs.readdirSync(this.storagePath);
-            // Filter for only .bin files
             const binFiles = files.filter(file => file.endsWith('.bin'));
+
             if (binFiles && binFiles.length > 0) {
-                binFiles.forEach(file => {
+                binFiles.forEach(async (file) => {
                     const streamKey = path.basename(file, '.bin');
                     const filePath = path.join(this.storagePath, file);
-                    this.streamKeyPath.set(streamKey, filePath);
+
+                    try {
+                        const stats = await fs.promises.stat(filePath);
+                        const fileAgeMillSecs = Date.now() - stats.mtimeMs;
+                        const fileSizeBytes = stats.size;
+
+                        if (fileSizeBytes > MAX_FILE_SIZE_BYTES || fileAgeMillSecs > MAX_FILE_AGE_MILLI_SECS) {
+                            try {
+                                await fs.promises.unlink(filePath);
+                            } catch (deleteError) { }
+                        } else {
+                            this.streamKeyPath.set(streamKey, filePath);
+                        }
+
+                    } catch (statError) { }
                 });
             }
         } catch (e) { }
     }
+
     getSize() {
         return this.streamKeyPath.size;
     }
@@ -580,6 +603,7 @@ class FileStorageCache {
 
                     } catch (e) { }
                 }
+
             }
         } catch (e) {
         } finally {
