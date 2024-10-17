@@ -2,7 +2,6 @@
   MIT License Copyright 2021-2024 - Bitpool Pty Ltd
 */
 
-
 const _ = require("underscore");
 const camelCase = require('camelcase');
 const fs = require('fs');
@@ -24,14 +23,18 @@ const MAX_UNIQUE_TIMESTAMPS = 10;
 class Data {
     constructor() {
         this.dataType = DataType.UNKNOWN;
-        this.timestampOfFirstRecord = new Date();
         this.values = [];
         this.timestamps = new Set(); // Track existing timestamps        
     }
+    addValue(value, recordDate) {
+        // Round to the nearset second, remove timezone
+        let timestamp = null;
+        if (recordDate) {
+            timestamp = recordDate.toISOString().split('.')[0] + 'Z';
+        } else {
+            timestamp = new Date().toISOString().split('.')[0] + 'Z';
+        }
 
-    addValue(value) {
-        // Round to the nearset second
-        const timestamp = new Date().toISOString().split('.')[0] + 'Z';
         if (typeof value === "boolean") {
             value = value.toString();
         }
@@ -54,16 +57,10 @@ class Data {
 
             // Set dataType based on the first entry
             if (this.values.length === 1) {
-                this.timestampOfFirstRecord = new Date();
                 this.dataType = Data.checkDataType(value);
             }
         }
     }
-
-    getFirstRecordTimestamp() {
-        return this.timestampOfFirstRecord;
-    }
-
     static checkDataType(value) {
         if (typeof value === "number") {
             return DataType.DOUBLE;
@@ -75,11 +72,12 @@ class Data {
             return DataType.UNKNOWN;
         }
     }
-
     getDataType() {
         return this.dataType;
     }
-
+    setDataType(dataType) {
+        this.dataType = dataType;
+    }
     getAllValues() {
         const allValues = this.values.map(val => ({
             Ts: val.timestamp,
@@ -90,7 +88,6 @@ class Data {
         this.values = [];
         return allValues;
     }
-
     getSomeValues(count) {
         const someValues = this.values.slice(0, count).map(val => ({
             Ts: val.timestamp,
@@ -101,7 +98,6 @@ class Data {
         this.values = this.values.slice(count);
         return someValues;
     }
-
     delete() {
         this.values = [];
     }
@@ -124,24 +120,21 @@ class Stream {
         this.streamName = streamName;
         this.streamKey = streamKey;
         this.streamTags = streamTags;
+        this.areTagsPosted = false;
         this.data = new Data();
     }
-    addData(value) {
-        this.data.addValue(value);
-        return {
-            count: this.data.values.length,
-            firstTs: this.data.getFirstRecordTimestamp()
-        }
-    }
-
-    getQueueDetails() {
-        return {
-            count: this.data.values.length,
-            firstTs: this.data.getFirstRecordTimestamp()
-        }
+    addData(value, recordDate) {
+        this.data.addValue(value, recordDate);
+        return this.streamKey, this.areTagsPosted
     }
     getData() {
         return this.data;
+    }
+    setTagsPosted(posted) {
+        this.areTagsPosted = posted;
+    }
+    getTagsPosted() {
+        return this.areTagsPosted;
     }
     getStreamKey() {
         return this.streamKey || null;
@@ -149,7 +142,6 @@ class Stream {
     getStreamName() {
         return this.streamName || null;
     }
-
     updateTags(tags) {
         this.streamTags = tags;
     }
@@ -158,6 +150,9 @@ class Stream {
     }
     getDataType() {
         return this.data.getDataType();
+    }
+    setDataType(dataType) {
+        this.data.setDataType(dataType);
     }
     getAllValues() {
         return this.data.getAllValues();
@@ -168,24 +163,20 @@ class Stream {
     getRecordCount() {
         return this.data.values.length || 0;
     }
-    getFirstRecordTimestamp() {
-        return this.data.getFirstRecordTimestamp();
-    }
-
     static fromJSON(json) {
         const stream = new Stream();
         stream.streamName = json.streamName;
         stream.streamKey = json.streamKey;
+        stream.dataType = json.dataType;
         stream.streamTags = json.streamTags;
-        stream.data = Data.fromJSON(json.data);
         return stream;
     }
     toJSON() {
         return {
             streamName: this.streamName,
             streamKey: this.streamKey,
+            dataType: this.dataType,
             streamTags: this.streamTags,
-            data: this.data.toJSON()
         };
     }
 }
@@ -197,7 +188,6 @@ class Streams {
         this.keyToName = new Map();
         this.countOfAllRecs = 0;
     }
-
     addStreamName(streamName) {
         if (!streamName) {
             throw new Error("Stream name cannot be empty");
@@ -205,6 +195,7 @@ class Streams {
         if (this.streams.has(streamName) == false) {
             this.streams.set(streamName, new Stream(streamName));
         }
+        return this.streams.get(streamName);
     }
     updateStreamKey(streamName, streamKey = null) {
         if (!streamName) {
@@ -222,6 +213,23 @@ class Streams {
     hasStreamKey(streamKey) {
         return this.keyToName.has(streamKey);
     }
+    hasStreamName(streamName) {
+        return this.nameToKey.has(streamName);
+    }
+
+    setDataType(streamName, dataType) {
+        if (this.streams.has(streamName)) {
+            const existingStream = this.streams.get(streamName);
+            existingStream.dataType = dataType;
+        }
+    }
+    getDataType(streamName) {
+        if (this.streams.has(streamName)) {
+            const existingStream = this.streams.get(streamName);
+            return existingStream.dataType;
+        }
+        return null;
+    }
 
     getCountOfAllRecords() {
         let totalRecords = 0;
@@ -231,7 +239,6 @@ class Streams {
         this.countOfAllRecs = totalRecords;
         return totalRecords;
     }
-
     getStreamByNameOrKey(identifier) {
         if (!identifier) {
             throw new Error("Stream name/key cannot be empty");
@@ -248,6 +255,9 @@ class Streams {
     }
     getStreamKeyList() {
         return Array.from(this.nameToKey.values());
+    }
+    getStreamKeyCount() {
+        return this.keyToName.size;
     }
     getStreamCount() {
         return this.streams.size;
@@ -272,31 +282,17 @@ class Streams {
             throw new Error("Stream not found");
         }
     }
-
-    getEarliestTimestamp() {
-        let earliestTimestamp = null;
-        this.streams.forEach(stream => {
-            const streamTimestamp = stream.getFirstRecordTimestamp();
-            if (earliestTimestamp === null || streamTimestamp < earliestTimestamp) {
-                earliestTimestamp = streamTimestamp;
-            }
-        });
-        return earliestTimestamp;
-    }
     delete(streamName) {
         this.streams.delete(streamName);
     }
-
     deleteValues(streamName) {
         if (this.streams.has(streamName)) {
             const existingStream = this.streams.get(streamName);
             existingStream.data.values = []
         }
     }
-
     static fromJSON(json) {
         const streams = new Streams();
-        streams.countOfAllRecs = json.countOfAllRecs || 0;
         streams.nameToKey = new Map(json.nameToKey);
         streams.keyToName = new Map(json.keyToName);
         streams.streams = new Map(Object.entries(json.streams).map(([key, value]) => [key, Stream.fromJSON(value)]));
@@ -309,7 +305,6 @@ class Streams {
             streamsObj[key] = value.toJSON();
         });
         return {
-            countOfAllRecs: this.countOfAllRecs,
             nameToKey: Array.from(this.nameToKey.entries()),
             keyToName: Array.from(this.keyToName.entries()),
             streams: streamsObj,
@@ -325,28 +320,24 @@ class Pool {
         this.poolTags = [];
         this.streams = new Streams();
     }
-
     setPoolName(poolName) {
         this.poolName = poolName;
     }
     getPoolName() {
         return this.poolName || null;
     }
-
     setPoolKey(poolKey) {
         this.poolKey = poolKey;
     }
     getPoolKey() {
         return this.poolKey || null;
     }
-
     setStationId(stationId) {
         this.stationId = stationId;
     }
     getStationId() {
         return this.stationId || null;
     }
-
     setPoolTags(poolTags) {
         if (Array.isArray(poolTags)) {
             this.poolTags = poolTags.map(tag => tag.trim());
@@ -357,11 +348,15 @@ class Pool {
     hasStreamKey(streamKey) {
         return this.streams.hasStreamKey(streamKey);
     }
+    hasStreamName(streamName) {
+        return this.streams.hasStreamName(streamName);
+    }
+
     getStreamCount() {
         return this.streams.getStreamCount();
     }
-    getEarliestTimestamp() {
-        return this.streams.getEarliestTimestamp();
+    getStreamKeyCount() {
+        return this.streams.getStreamKeyCount();
     }
     getCountOfAllRecords() {
         return this.streams.getCountOfAllRecords();
@@ -387,40 +382,37 @@ class Pool {
             return item;
         });
     }
-
     findMissingTags(nodePoolTags, serverPoolTags) {
         const missingTags = nodePoolTags.filter(tag => !serverPoolTags.includes(tag));
         return missingTags.length > 0 ? missingTags : [];
     }
-
-
     addStreamName(streamName) {
-        this.streams.addStreamName(streamName);
+        return this.streams.addStreamName(streamName);
     }
     updateStreamKey(streamName, streamKey = null) {
         this.streams.updateStreamKey(streamName, streamKey);
     }
-
     getStreamByNameOrKey(identifier) {
         return this.streams.getStreamByNameOrKey(identifier);
     }
-
     getStreamKeyList() {
         return this.streams.getStreamKeyList();
     }
-
     updateStreamTags(streamName, tags) {
         this.streams.updateStreamTags(streamName, tags);
     }
-
+    setDataType(streamName, dataType) {
+        this.streams.setDataType(streamName, dataType);
+    }
+    getDataType(streamName) {
+        return this.streams.getDataType(streamName);
+    }
     deleteStream(streamName) {
         this.streams.delete(streamName);
     }
-
     deleteStreamValues(streamName) {
         this.streams.deleteValues(streamName);
     }
-
     stream(streamName) {
         const stream = this.streams.getStreamByNameOrKey(streamName);
         if (!stream) {
@@ -428,7 +420,6 @@ class Pool {
         }
         return stream;
     }
-
     static fromJSON(json) {
         const pool = new Pool();
         pool.poolName = json.poolName;
@@ -438,7 +429,6 @@ class Pool {
         pool.streams = Streams.fromJSON(json.streams);
         return pool;
     }
-
     toJSON() {
         return {
             poolName: this.poolName,
@@ -469,7 +459,6 @@ class FileStorageCache {
         }
         this.loadFiles();
     }
-
     loadFiles() {
         try {
             const files = fs.readdirSync(this.storagePath);
@@ -508,7 +497,6 @@ class FileStorageCache {
         }
         return this.streamKeyPath;
     }
-
     async appendData(streamKey, dataArray) {
         let filePath = null;
         let writeStream = null;
@@ -635,6 +623,13 @@ class FileStorageCache {
             }
         }
     }
+    purge() {
+        try {
+            this.streamKeyPath.forEach((value, key) => {
+                this.deleteFile(key);
+            });
+        } catch (e) { }
+    }
 
     deleteFile(streamKey) {
         try {
@@ -656,4 +651,4 @@ class FileStorageCache {
     }
 }
 
-module.exports = { Pool, FileStorageCache };
+module.exports = { Pool, FileStorageCache, DataType };

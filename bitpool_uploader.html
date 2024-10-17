@@ -11,16 +11,16 @@
       events: { value: true },
       apiKey: { type: "Bitpool-Api-Key", required: true },
       pool_settings: { type: "Bitpool-Pool-Settings", required: false },
-      stream_name: { value: "", required: false },  // Backward compatibility hide and replace with uploadCountV2
-      uploadCount: { value: 100, required: true },  // Backward compatibility hide and replace with uploadCountV2
-      uploadCountV2: { value: 4, required: false },
+      stream_name: { value: "", required: false }, // Backward compatibility hide and replace with uploadCountV2
+      uploadCount: { value: 100, required: true }, // Backward compatibility hide and replace with uploadCountV2
+      uploadCountV2: { value: 4, required: false }, // Backward compatibility hide and replace with uploadCountV2.1.1
       timeout: { value: 10, required: false },
       uploadInterval: { value: "" },
       uploadInterval_value: { value: "15", required: true },
       uploadInterval_options: { value: "Minutes", required: true },
-      bpChkShowDateOnLabel: { value: true },      // Backward compatibility hide
+      bpChkShowDateOnLabel: { value: true }, // Backward compatibility hide
       bpChkShowDebugWarnings: { value: true },
-      rebuildOnError: { value: true },          // Backward compatibility hide
+      rebuildOnError: { value: true }, // Backward compatibility hide
       PoolTags: { value: "" },
     },
     inputs: 1,
@@ -114,7 +114,6 @@
   }
 </script>
 
-
 <style></style>
 
 <script type="text/html" data-template-name="uploader">
@@ -130,7 +129,7 @@
     }
     .node-ports ul li {
       border: none !important;
-    }    
+    }
   </style>
 
   <div class="form-row node-input-read-tabs-row">
@@ -171,7 +170,8 @@
       <div class="form-row" style="display: none;">
         <label for="node-input-stream_name"
           ><i class="icon-tag"></i>
-          <span data-i18n="bitpool-uploader.label.stream_name"></span>Stream Name</label
+          <span data-i18n="bitpool-uploader.label.stream_name"></span>Stream
+          Name</label
         >
         <input
           type="text"
@@ -180,29 +180,31 @@
         />
       </div>
 
-       <!-- Hide this for backward compatibility -->
-      <div class="form-row"  style="display: none;">
+      <!-- Hide this for backward compatibility -->
+      <div class="form-row" style="display: none;">
         <label for="node-input-uploadCount">
           <i class="icon-tag"></i>
-          <span data-i18n="bitpool-uploader.label.uploadCount"></span>Upload On Stream Count
+          <span data-i18n="bitpool-uploader.label.uploadCount"></span>Upload On
+          Stream Count
         </label>
         <input type="number" id="node-input-uploadCount" placeholder="100" />
-      </div> 
-      <!-- Hide this for backward compatibility -->
+      </div>
 
-      <div class="form-row"  style="display: flex;">
+      <!-- Hide this for backward compatibility -->
+      <div class="form-row" style="display: none;">
         <label for="node-input-uploadCountV2">
           <i class="icon-tag"></i>
-          <span data-i18n="bitpool-uploader.label.uploadCountV2"></span>Upload On<br>Log Count
+          <span data-i18n="bitpool-uploader.label.uploadCountV2"></span>Upload
+          On<br />Log Count
         </label>
         <input type="number" id="node-input-uploadCountV2" placeholder="4" />
-      </div>      
+      </div>
 
       <div class="form-row" style="display: flex;">
         <label for="node-input-uploadInterval" style="align-self: center;"
           ><i class="icon-tag"></i>
-          <span data-i18n="bitpool-uploader.label.uploadInterval"></span
-          >Upload On<br>Expired Time
+          <span data-i18n="bitpool-uploader.label.uploadInterval"></span>Upload
+          On<br />Expired Time
         </label>
         <input
           type="text"
@@ -230,12 +232,19 @@
       <div class="form-row" style="display: flex;">
         <label for="node-input-timeout" style="display: block;">
           <i class="icon-tag"></i>
-          <span data-i18n="@bitpoolos/edge-uploader/bitpool_uploader:bitpool-uploader.label.timeout"></span>
-          Network<br>Timeout Secs
+          <span
+            data-i18n="@bitpoolos/edge-uploader/bitpool_uploader:bitpool-uploader.label.timeout"
+          ></span>
+          Network<br />Timeout Secs
         </label>
-        <input type="number" id="node-input-timeout" placeholder="10" autocomplete="off" dir="">
+        <input
+          type="number"
+          id="node-input-timeout"
+          placeholder="10"
+          autocomplete="off"
+          dir=""
+        />
       </div>
-
     </div>
 
     <div id="options-tab">
@@ -283,7 +292,7 @@
           >Show any info/warning/error messages to the debug tab</label
         >
       </div>
-      
+
       <!-- Hide this for backward compatibility -->
       <div class="form-row" style="display: none;">
         <p><u>Rebuild:</u></p>
@@ -309,7 +318,7 @@
         >
       </div>
     </div>
-      <!-- Hide this for backward compatibility -->
+    <!-- Hide this for backward compatibility -->
 
     <div id="pooltags-tab">
       <!-- Pool Tags section-->
@@ -387,7 +396,7 @@
   <style>
     .node-ports ul li {
       border: none !important;
-    }    
+    }
   </style>
 
   <h3><strong>Overview:</strong></h3>
@@ -397,62 +406,80 @@
   <p>A new record can be added to a Stream by sending a message to the input of the Uploader node. The message must include a Stream Name (<strong>msg.topic</strong>) and a payload (<strong>msg.payload</strong>). Metadata can be added to the record by adding a meta object to the message (<strong>msg.meta</strong>). As long as the API Key is valid and the Pool Name is correct, then data will be uploaded to Bitpool.</p>
 
   <h3><strong>API Key</strong></h3>
-      <ol class="node-ports">
-      <ul>
-          <li><strong>API Key:</strong> Specify your API key provided by <a href="https://app.bitpool.com" target="_blank">https://app.bitpool.com</a></li>          
-      </ul></p>
-      <p>
+  <ol class="node-ports">
+  <ul>
+    <li><strong>API Endpoint:</strong> The domain name endpoint of the Bitpool Cloud (protocol not required). The default is <a href="api.bitpool.com" target="_blank">api.bitpool.com</a></li>
+    <li><strong>API Key:</strong> Specify your API key provided by <a href="https://app.bitpool.com" target="_blank">https://app.bitpool.com</a></li>
+  </ul></p>
+  <p>
 
-      </ol>
+  </ol>
 
-      <h3><strong>Pool Settings</strong></h3>
-      <ol class="node-ports">
-      <ul>
-           <li><strong>Pool Name:</strong> Enter the pool name where the data will be stored in the Bitpool platform.</li>           
-           <li><strong>Public Pool: </strong> Indicates whether the pool is public.</li>
-           <li><strong>Virtual Pool: </strong> Indicates whether the pool is virtual.</li>
-      </ul></p>
-      <p>
-      </ol>
+  <h3><strong>Pool Settings</strong></h3>
+  <ol class="node-ports">
+  <ul>
+        <li><strong>Pool Name:</strong> Enter the pool name where the data will be stored in the Bitpool platform.</li>
+        <li><strong>Public Pool: </strong> Indicates whether the pool is public.</li>
+        <li><strong>Virtual Pool: </strong> Indicates whether the pool is virtual.</li>
+  </ul></p>
+  <p>
+  </ol>
 
-      <h3><strong>Bitpool Uploader</strong></h3>
-      <ol class="node-ports">
-        <ul>
-          <li><strong>Upload On Log Count:</strong> The maximum number of cached stream records before data is uploaded. The default is 4 records per stream.</li>
-          <li><strong>Upload On Expired Time:</strong> The maximum number of minutes that elapse from the last upload timer event before data is uploaded. The default is 15 minute.</li>
-          <li><strong>Network Timeout Secs:</strong> The number of seconds an HTTP request will wait for the server before timing out. The default is 10 seconds.</li>
-        </ul>
-      </ol>
-      
-      <h3><strong>Options</strong></h3>
-      <ol class="node-ports">
-        <ul>
-          <li><strong>Monitoring:</strong> Toggles system outputs and logging in both status and debug sections</li>
-        </ul>
-        <p>
-      </ol>
+  <h3><strong>Bitpool Uploader</strong></h3>
+  <ol class="node-ports">
+    <ul>
+      <li><strong>Upload On Expired Time:</strong> The maximum number of minutes that elapse from the last upload timer event before data is uploaded. The default is 15 minute.</li>
+      <li><strong>Network Timeout Secs:</strong> The number of seconds an HTTP request will wait for the server before timing out. The default is 10 seconds.</li>
+    </ul>
+  </ol>
 
-      <h3><strong>Action Commands</strong></h3>
-        <ol class="node-ports">
-        <ul>
-          <p>You can send action commands to the input of the Uploader node to assist with debugging. Use <strong>msg.BPCommand</strong> on an Inject node and set string to:</p>  
-          <li><strong>SHOW_CONFIG:</strong> Outputs the current configuration to the debug tab as an object. Note, you need to add a debug node to the Uploader output.</li>          
-          <li><strong>SHOW_POOL:</strong> Outputs the current pool model to the debug tab as an object. Note, you need to add a debug node to the Uploader output.</li>
-          <li><strong>CREATE_POOL:</strong> Creates a new pool model based on the configuration pool name (<strong>Note 1</strong>). Sends message to debug tab to acknowledge.</li>
-          <li><strong>SAVE_POOL:</strong> Saves the current pool model to a file. Sends message to debug tab to acknowledge.</li>
-          <li><strong>PURGE_DATA:</strong> Purges all record data stored on this node. Sends message to debug tab to acknowledge.</li>
-          <li><strong>UPLOAD_DATA:</strong> Uploads all record data stored on this node. Sends message to debug tab to acknowledge.</li>
-          <p><i><strong>Note 1.</strong> <span style="color: rgb(147, 56, 56, 1) !important;">If you’re adding multiple Uploaders to your flows, make sure to assign a unique name to each pool. This is important because each pool generates its own configuration file. Failure to do so may lead to uploads going to the wrong pool or cause configuration file problems.</span></i></p>
-        </ul>
-      </ol>
+  <h3><strong>Options</strong></h3>
+  <ol class="node-ports">
+    <ul>
+      <li><strong>Monitoring:</strong> Toggles system outputs and logging in both status and debug sections</li>
+    </ul>
+    <p>
+  </ol>
 
-      <h3><strong>Resources:</strong></h3>
-      <ol class="node-ports">
-      <ul type="1">
-        <li><a href="https://www.bitpool.com/">bitpool.com</a> - check us out here.</li>
-        <li><a href="https://app.bitpool.com/">app.bitpool.com</a> - set up your account.</li>
-        <li><a href="https://wiki.bitpool.com/">wiki.bitpool.com</a> - find more documentation.</li>
-      </ul>
-    </ol>
+  <h3><strong>Action Commands</strong></h3>
+    <ol class="node-ports">
+    <ul>
+      <p>You can send action commands to the input of the Uploader node to assist with debugging. Use <strong>msg.BPCommand</strong> on an Inject node and set string to:</p>
+      <li><strong>SHOW_CONFIG:</strong> Outputs the current configuration to the debug tab as an object. Note, you need to add a debug node to the Uploader output.</li>
+      <li><strong>SHOW_POOL:</strong> Outputs the current pool model to the debug tab as an object. Note, you need to add a debug node to the Uploader output.</li>
+      <li><strong>CREATE_POOL:</strong> Creates a new pool model based on the configuration pool name. Sends message to debug tab to acknowledge.</li>
+      <li><strong>PURGE_DATA:</strong> Purges all record data stored on this node. Sends message to debug tab to acknowledge.</li>
+      <li><strong>UPLOAD_DATA:</strong> Uploads all record data stored on this node. Sends message to debug tab to acknowledge.</li>
+    </ul>
+  </ol>
 
-    </script>
+  <h3><strong>Node Status Messages</strong></h3>
+  <ol class="node-ports">
+    <ul>
+      <li><strong>In:</strong> The number of messages received at the Input.</li>
+      <li><strong>Out:</strong> The number of messages sent to the upload queue. This occurs when the timer event triggers an upload.</li>
+      <li><strong>Time:</strong> The count down until the next upload based on the current configuration.</li>
+      <li><strong>Streams:</strong> The number of streams identified on this node. Note, this is not the count of streams in the pool. These will match once all streams are added successfully.</li>
+      <li><strong>Cache:</strong> The number of stream records currently cached, waiting to be uploaded after a failed upload attempt.</li>
+    </ul>
+    <p>
+  </ol>
+
+  <h3><strong>Node Message Properties</strong></h3>
+  <ol class="node-ports">
+    <ul>
+      <li><strong>msg.meta:</strong> String containing the key/value pairs to be stored against the stream. This is optional.</li>
+      <li><strong>msg.utcSeconds:</strong> The number of seconds since 1970-01-01 00:00:00 UTC. This is optional, if not provided, the current timestamp will be used.</li>
+    </ul>
+    <p>
+  </ol>
+
+  <h3><strong>Resources:</strong></h3>
+  <ol class="node-ports">
+  <ul type="1">
+    <li><a href="https://www.bitpool.com/">bitpool.com</a> - check us out here.</li>
+    <li><a href="https://app.bitpool.com/">app.bitpool.com</a> - set up your account.</li>
+    <li><a href="https://wiki.bitpool.com/">wiki.bitpool.com</a> - find more documentation.</li>
+  </ul>
+  </ol>
+</script>
