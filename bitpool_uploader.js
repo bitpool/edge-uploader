@@ -24,11 +24,12 @@ module.exports = function (RED) {
         // Config options for Bitpool API
         let apiKeyConfig = RED.nodes.getNode(config.apiKey);
         let poolSettings = RED.nodes.getNode(config.pool_settings);
-        let api_key = apiKeyConfig.api_key || "";
-        let api_endpoint = apiKeyConfig.api_endpoint || "api.bitpool.com";
-        let pool_name = poolSettings.pool_name || "";
         let public = poolSettings.public || false;
         let virtual = poolSettings.virtual || false;
+
+        let api_key = cleanUserInput(apiKeyConfig.api_key) || "";
+        let pool_name = cleanUserInput(poolSettings.pool_name) || "";
+        let api_endpoint = cleanUserInput(apiKeyConfig.api_endpoint) || "api.bitpool.com";
 
         // Config options for status monitoring
         let timeoutSecs = Number(config.timeout || HTTP_TIMEOUT_SECS);
@@ -152,15 +153,6 @@ module.exports = function (RED) {
                     node.status({ fill: "red", shape: "ring", text: "Error initializing" });
                 }
 
-                if (bpChkShowDebugWarnings) {
-                    // Send the pool object to the debug window on startup 
-                    node.send({
-                        "payload": {
-                            "pool": node.pool
-                        }
-                    });
-                }
-
                 backPopStreams();
 
                 // Set up timer to update the UI
@@ -258,6 +250,16 @@ module.exports = function (RED) {
                 } else {
                     logWarn(`No streams found for pool (${node.pool.getPoolName()}).`);
                 }
+
+                if (bpChkShowDebugWarnings) {
+                    // Send the pool object to the debug window on startup 
+                    node.send({
+                        "payload": {
+                            "pool": node.pool
+                        }
+                    });
+                }
+
             } catch (error) {
                 logError("Error in Streams Timer:", error.message || error);
             }
@@ -671,6 +673,13 @@ module.exports = function (RED) {
             } catch (error) {
                 logError("Error in Stop All Timers:", error.message || error);
             }
+        }
+        function cleanUserInput(input) {
+            if (typeof input !== 'string') {
+                return '';
+            }
+            // Remove non-printable characters, including control characters
+            return input.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
         }
         function isValidApiKey(apiKey) {
             if (apiKey == null) { // Check for null or undefined

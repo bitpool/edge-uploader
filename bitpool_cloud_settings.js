@@ -3,13 +3,13 @@
 */
 
 
-module.exports = function(RED) {
-    function BitpoolCloudSettings(config) {
+module.exports = function (RED) {
+  function BitpoolCloudSettings(config) {
 
-        let name = config.name;
-        let apiKey = config.api_key;
-        
-        RED.nodes.createNode(this,config);
-    }
-    RED.nodes.registerType("Bitpool-Cloud-Settings", BitpoolCloudSettings);
+    let name = config.name;
+    let apiKey = config.api_key;
+
+    RED.nodes.createNode(this, config);
+  }
+  RED.nodes.registerType("Bitpool-Cloud-Settings", BitpoolCloudSettings);
 }
