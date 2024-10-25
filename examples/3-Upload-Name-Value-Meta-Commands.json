@@ -2,7 +2,7 @@
     {
         "id": "b1a5ef0bdd0af47b",
         "type": "debug",
-        "z": "4a2c7dab2beb4f28",
+        "z": "c4d6ad25761e2db6",
         "name": "Debug",
         "active": true,
         "tosidebar": true,
@@ -12,14 +12,14 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 830,
-        "y": 100,
+        "x": 1250,
+        "y": 540,
         "wires": []
     },
     {
         "id": "16904cded652f885",
         "type": "inject",
-        "z": "4a2c7dab2beb4f28",
+        "z": "c4d6ad25761e2db6",
         "name": "Upload Stream Record",
         "props": [
             {
@@ -37,8 +37,8 @@
         "topic": "stream name 1",
         "payload": "",
         "payloadType": "date",
-        "x": 180,
-        "y": 100,
+        "x": 600,
+        "y": 540,
         "wires": [
             [
                 "229ac627d4af38af"
@@ -48,7 +48,7 @@
     {
         "id": "4985eddfc26bd248",
         "type": "uploader",
-        "z": "4a2c7dab2beb4f28",
+        "z": "c4d6ad25761e2db6",
         "name": "Bitpool Uploader",
         "events": true,
         "apiKey": "",
@@ -64,8 +64,8 @@
         "bpChkShowDebugWarnings": true,
         "rebuildOnError": true,
         "PoolTags": "",
-        "x": 630,
-        "y": 100,
+        "x": 1050,
+        "y": 540,
         "wires": [
             [
                 "b1a5ef0bdd0af47b"
@@ -75,7 +75,7 @@
     {
         "id": "229ac627d4af38af",
         "type": "metatag",
-        "z": "4a2c7dab2beb4f28",
+        "z": "c4d6ad25761e2db6",
         "name": "Meta Data",
         "metatag": "",
         "StreamTags": "",
@@ -120,8 +120,8 @@
         "checkall": "true",
         "repair": false,
         "outputs": 1,
-        "x": 410,
-        "y": 100,
+        "x": 830,
+        "y": 540,
         "wires": [
             [
                 "4985eddfc26bd248"
@@ -131,7 +131,7 @@
     {
         "id": "2c68a5ffaba3095a",
         "type": "inject",
-        "z": "4a2c7dab2beb4f28",
+        "z": "c4d6ad25761e2db6",
         "name": "SHOW_CONFIG",
         "props": [
             {
@@ -145,8 +145,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 320,
-        "y": 160,
+        "x": 740,
+        "y": 600,
         "wires": [
             [
                 "4985eddfc26bd248"
@@ -156,7 +156,7 @@
     {
         "id": "bc17238751914457",
         "type": "inject",
-        "z": "4a2c7dab2beb4f28",
+        "z": "c4d6ad25761e2db6",
         "name": "SHOW_POOL",
         "props": [
             {
@@ -170,8 +170,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 310,
-        "y": 200,
+        "x": 730,
+        "y": 640,
         "wires": [
             [
                 "4985eddfc26bd248"
@@ -181,7 +181,7 @@
     {
         "id": "892dba4d5aed4ade",
         "type": "inject",
-        "z": "4a2c7dab2beb4f28",
+        "z": "c4d6ad25761e2db6",
         "name": "CREATE_POOL",
         "props": [
             {
@@ -195,8 +195,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 320,
-        "y": 240,
+        "x": 740,
+        "y": 680,
         "wires": [
             [
                 "4985eddfc26bd248"
@@ -206,7 +206,7 @@
     {
         "id": "593d53e433fe61e0",
         "type": "inject",
-        "z": "4a2c7dab2beb4f28",
+        "z": "c4d6ad25761e2db6",
         "name": "PURGE_DATA",
         "props": [
             {
@@ -220,33 +220,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 320,
-        "y": 320,
-        "wires": [
-            [
-                "4985eddfc26bd248"
-            ]
-        ]
-    },
-    {
-        "id": "c4445dd4a2ce4ac6",
-        "type": "inject",
-        "z": "4a2c7dab2beb4f28",
-        "name": "SAVE_POOL",
-        "props": [
-            {
-                "p": "BPCommand",
-                "v": "SAVE_POOL",
-                "vt": "str"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "x": 310,
-        "y": 280,
+        "x": 740,
+        "y": 720,
         "wires": [
             [
                 "4985eddfc26bd248"
@@ -256,7 +231,7 @@
     {
         "id": "e9292c4efca773ee",
         "type": "inject",
-        "z": "4a2c7dab2beb4f28",
+        "z": "c4d6ad25761e2db6",
         "name": "UPLOAD_DATA",
         "props": [
             {
@@ -270,8 +245,8 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "x": 320,
-        "y": 360,
+        "x": 740,
+        "y": 760,
         "wires": [
             [
                 "4985eddfc26bd248"

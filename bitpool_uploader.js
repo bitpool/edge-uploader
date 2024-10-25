@@ -73,6 +73,18 @@ module.exports = function (RED) {
                     logError("Error stopping timers:", error.message || error);
                 }
 
+                // Check if the API key is set
+                if (!isValidApiKey(api_key)) {
+                    logError("API key is invalid or empty, please check to continue.");
+                    return;
+                }
+
+                // Check if the pool name is set
+                if (!isValidPoolName(pool_name)) {
+                    logError("Pool Name is invalid or empty, please check to continue.");
+                    return;
+                }
+
                 if (bpChkShowDebugWarnings) {
                     try {
                         // Send the pool configuration to the debug window on startup                
@@ -97,39 +109,44 @@ module.exports = function (RED) {
                 try {
                     // Wait for the system to load, then set up the pool and station with tags
                     setTimeout(async () => {
-                        node.pool = new Pool();
+                        try {
+                            node.pool = new Pool();
 
-                        // Create pool object
-                        node.pool.setPoolName(pool_name);
+                            // Create pool object
+                            node.pool.setPoolName(pool_name);
 
-                        // Add default tags and clean
-                        let defaultTags = [
-                            `operatingSystem=${os.version()}`,
-                            `nodejsVersion=${process.version}`,
-                            `nodeRedVersion=${RED.version()}`
-                        ];
-                        let poolTagsOnNode = node.pool.cleanTags(node.PoolTags + "," + defaultTags.join(','))
+                            // Add default tags and clean
+                            let defaultTags = [
+                                `operatingSystem=${os.version()}`,
+                                `nodejsVersion=${process.version}`,
+                                `nodeRedVersion=${RED.version()}`
+                            ];
+                            let poolTagsOnNode = node.pool.cleanTags(node.PoolTags + "," + defaultTags.join(','))
 
-                        // Get pool details from API
-                        let serverPool = await postAddUpdatePool(pool_name);
-                        if (serverPool.PoolKey && isValidGUID(serverPool.PoolKey)) {
-                            node.pool.setPoolKey(serverPool.PoolKey);
-                            await postAddPoolTags(serverPool.PoolKey, poolTagsOnNode);
-                            node.pool.setPoolTags(poolTagsOnNode);
+                            // Get pool details from API
+                            let serverPool = await postAddUpdatePool(pool_name);
+                            if (serverPool.PoolKey && isValidGUID(serverPool.PoolKey)) {
+                                node.pool.setPoolKey(serverPool.PoolKey);
+                                await postAddPoolTags(serverPool.PoolKey, poolTagsOnNode);
+                                node.pool.setPoolTags(poolTagsOnNode);
 
-                            // Get station details from API
-                            let stationID = await postAddUpdateStation(serverPool.PoolKey, pool_name);
-                            node.pool.setStationId(stationID)
+                                // Get station details from API
+                                let stationID = await postAddUpdateStation(serverPool.PoolKey, pool_name);
+                                node.pool.setStationId(stationID)
 
-                            updateStatusMsg({ fill: "green", shape: "dot", text: "Pool initialised OK" });
+                                updateStatusMsg({ fill: "green", shape: "dot", text: "Pool initialised OK" });
 
-
-                        } else {
-                            logWarn("Error initializing:", error.message || error);
-                            node.status({ fill: "red", shape: "ring", text: "Error initializing" });
+                            } else {
+                                logWarn("Error initializing:", error.message || error);
+                                node.status({ fill: "red", shape: "ring", text: "Error initializing" });
+                            }
+                        } catch (error) {
+                            logError("Error initializing:", error.message || error);
+                            logWarn("Please make sure the API is valid and the Pool Name is correct.");
+                            node.status({ fill: "red", shape: "ring", text: "Error, check valid API key and Pool Name" });
                         }
-
                     }, 1);
+
                 } catch (error) {
                     logError("Error initializing:", error.message || error);
                     node.status({ fill: "red", shape: "ring", text: "Error initializing" });
@@ -262,22 +279,19 @@ module.exports = function (RED) {
         async function uploadQueuedDataNow() {
             try {
                 if (enqueuedStreamBlocks.length > 0) {
-                    try {
-                        const maxNumberOfStreamsPerBulkPost = DATA_UPLOAD_CHUNK_SIZE;
-                        while (enqueuedStreamBlocks.length > 0) {
-                            const chunk = enqueuedStreamBlocks.splice(0, maxNumberOfStreamsPerBulkPost);
-                            const result = await postBulkStreamData(chunk);
-                            if (!result) {
-                                logWarn(`Failed to upload stream data`);
-                            }
+                    const maxNumberOfStreamsPerBulkPost = DATA_UPLOAD_CHUNK_SIZE;
+                    while (enqueuedStreamBlocks.length > 0) {
+                        const chunk = enqueuedStreamBlocks.splice(0, maxNumberOfStreamsPerBulkPost);
+                        const result = await postBulkStreamData(chunk);
+                        if (!result) {
+                            logWarn(`Failed to upload stream data`);
                         }
-                        enqueuedStreamBlocks = [];
-                    } catch (error) {
-                        logError('Bulk data upload failed:', error.message || error);
                     }
                 }
             } catch (error) {
                 logError("Error in Upload Post Timer:", error.message || error);
+            } finally {
+                enqueuedStreamBlocks = [];
             }
         }
 
@@ -461,6 +475,7 @@ module.exports = function (RED) {
         node.on('close', async function () {
             try {
                 stopAllTimers();
+                enqueuedStreamBlocks = [];
             } catch (error) {
                 logError("Error in On Close:", error.message || error);
             }
@@ -640,7 +655,8 @@ module.exports = function (RED) {
             } catch (error) {
                 logError("Error posting bulk data: ", error.message || error);
                 throw error;
-
+            } finally {
+                enqueuedStreamBlocks.length = 0;
             }
         }
 
@@ -655,6 +671,17 @@ module.exports = function (RED) {
             } catch (error) {
                 logError("Error in Stop All Timers:", error.message || error);
             }
+        }
+        function isValidApiKey(apiKey) {
+            if (apiKey == null) { // Check for null or undefined
+                return false;
+            }
+            const apiKeyRegex = /^Bitpool2 [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[4][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+            return apiKeyRegex.test(apiKey);
+        }
+        function isValidPoolName(poolName) {
+            // Check if poolName is not null, not undefined, not empty, not just numbers, and its length is <= 255
+            return poolName != null && typeof poolName === 'string' && poolName.length > 0 && poolName.length <= 255 && !/^\d+$/.test(poolName);
         }
         function fixTags(tags) {
             // Fix tags format

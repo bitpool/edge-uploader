@@ -2,44 +2,53 @@
   MIT License Copyright 2021-2024 - Bitpool Pty Ltd
 -->
 
-
 <script type="text/javascript">
-  RED.nodes.registerType('Bitpool-Pool-Settings', {
-    category: 'config',
+  RED.nodes.registerType("Bitpool-Pool-Settings", {
+    category: "config",
     defaults: {
-      name: {value:""},
-      pool_name: {value:""},
-      public: {value: false},
-      virtual: {value: false}
+      name: { value: "" },
+      pool_name: { value: "" },
+      public: { value: false },
+      virtual: { value: false },
     },
     label: function () {
       return this.name || "Bitpool-Pool-Settings";
-    }
+    },
   });
 </script>
-  
+
 <script type="text/html" data-template-name="Bitpool-Pool-Settings">
+  <div class="form-row">
+    <label for="node-config-input-name"
+      ><i class="icon-tag"></i
+      ><span data-i18n="bitpool-uploader.label.name"></span> Name</label
+    >
+    <input type="text" id="node-config-input-name" placeholder="Config Name" />
+  </div>
 
-    <div class="form-row">
-      <label for="node-config-input-name"><i class="icon-tag"></i><span data-i18n="bitpool-uploader.label.name"></span> Name</label>
-      <input type="text" id="node-config-input-name" placeholder="Config Name">
-    </div>
+  <div class="form-row">
+    <label for="node-config-input-pool_name"
+      ><i class="icon-tag"></i>
+      <span data-i18n="bitpool-uploader.label.pool_name"></span>Pool Name</label
+    >
+    <input
+      type="text"
+      id="node-config-input-pool_name"
+      placeholder="Pool Name"
+    />
+  </div>
 
-    <div class="form-row">
-        <label for="node-config-input-pool_name"><i class="icon-tag"></i> <span data-i18n="bitpool-uploader.label.pool_name"></span>Pool Name</label>
-        <input type="text" id="node-config-input-pool_name" placeholder="msg.pool">
-    </div>
+  <div class="form-row">
+    <label class="switch" for="node-config-input-public"
+      ><span data-i18n="bitpool-uploader.label.public"></span> Public Pool
+      <input type="checkbox" id="node-config-input-public" />
+      <span class="slider round"></span>
+    </label>
 
-    <div class="form-row">
-      <label class="switch" for="node-config-input-public"><span data-i18n="bitpool-uploader.label.public"></span> Public Pool
-          <input type="checkbox" id="node-config-input-public">
-          <span class="slider round"></span>
-      </label>
-
-      <label class="switch" for="node-config-input-virtual"><span data-i18n="bitpool-uploader.label.virtual"></span> Virtual Pool
-          <input type="checkbox" id="node-config-input-virtual">
-          <span class="slider round"></span>
-      </label>
-    </div>
-
+    <label class="switch" for="node-config-input-virtual"
+      ><span data-i18n="bitpool-uploader.label.virtual"></span> Virtual Pool
+      <input type="checkbox" id="node-config-input-virtual" />
+      <span class="slider round"></span>
+    </label>
+  </div>
 </script>
