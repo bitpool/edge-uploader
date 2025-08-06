@@ -631,7 +631,7 @@ class FileStorageCache {
         } catch (e) { }
     }
 
-    deleteFile(streamKey) {
+    async deleteFile(streamKey) {
         try {
             if (this.streamKeyPath.has(streamKey)) {
                 const filePath = this.streamKeyPath.get(streamKey);

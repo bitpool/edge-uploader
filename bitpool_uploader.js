@@ -12,7 +12,7 @@ module.exports = function (RED) {
 
     const HTTP_TIMEOUT_SECS = 10;                   // Default HTTP session timeout in seconds
     const DATA_UPLOAD_INTERVAL_SECS = 60;           // Interval in seconds to check for data upload (default, configurable by user)
-    const DATA_UPLOAD_CHUNK_SIZE = 10;              // Number of records to upload in a single batch
+    const DATA_UPLOAD_CHUNK_SIZE = 5;               // Number of records to upload in a single batch
     const DATA_STORAGE_PATH = './bitpool-data';
     const APP_POLL_UI_SECS = 1;
     const APP_POLL_ENQUEUE_SECS = 1;
@@ -303,7 +303,7 @@ module.exports = function (RED) {
 
                 try {
                     if (msg.BPCommand == "REBUILD") {
-                        logInfo("The command REBUILD is no longer supported (use CREATE_CONFIG). Note, CREATE_CONFIG will delete all exsiting configuration data.")
+                        logInfo("The REBUILD command is no longer supported (use CREATE_CONFIG). Note, CREATE_CONFIG will delete all exsiting configuration data.")
 
                     } else if (msg.BPCommand == "SHOW_CONFIG") {    // ----------------------------------------------
                         send({
@@ -612,48 +612,61 @@ module.exports = function (RED) {
             const maxConcurrentRequests = DATA_UPLOAD_CHUNK_SIZE;
 
             async function uploadBlock(pair) {
-                let body = JSON.stringify(pair.data);
                 const uri = `${node.rootUrlv2}streams/${pair.streamKey}/logs`;
+                const streamKey = pair.streamKey;
+                const newData = pair.data;
+                let allDataToSend = [];
+
                 try {
-
-                    // Check to see if any no set records in the cache for this stream
-                    try {
-                        if (node.fileCache.streamKeyExists(pair.streamKey)) {
-                            let dataType = node.pool.getStreamByNameOrKey(pair.streamKey).getDataType();
-                            if (dataType) {
-                                const cachedData = await node.fileCache.retrieveData(pair.streamKey, dataType);
-                                let cachedBody = JSON.stringify(cachedData);
-                                const resCached = await axiosInstance.post(uri, cachedBody);
-                                if (resCached.status === 200) {
-                                    node.fileCache.deleteFile(pair.streamKey)
-                                }
-                            }
+                    // Get cached data if available
+                    const dataType = node.pool.getStreamByNameOrKey(streamKey)?.getDataType();
+                    if (node.fileCache.streamKeyExists(streamKey) && dataType) {
+                        try {
+                            const cachedData = await node.fileCache.retrieveData(streamKey, dataType);
+                            allDataToSend.push(...cachedData);
+                        } catch (cacheErr) {
+                            logError(`Failed to read cache for stream ${streamKey}`, cacheErr.message);
                         }
-                    } catch (error) { }
-
-                    const res = await axiosInstance.post(uri, body);
-                    if (res.status === 200) {
-                        return;
-                    } else {
-                        throw new Error(`Error uploading to api server: ${res.status}`);
                     }
 
+                    allDataToSend.push(...newData);
+                    if (allDataToSend.length === 0) {
+                        logInfo(`No data to upload for stream ${streamKey}`);
+                        return;
+                    }
+
+                    const body = JSON.stringify(allDataToSend);
+                    const res = await axiosInstance.post(uri, body);
+
+                    // Print the entire axios response object with streamKey etc to assist with debugging
+                    if (bpChkShowDebugWarnings) {
+                        streamName = node.pool.getStreamNameByKey(streamKey) || "Unknown";
+                        streamData = { allDataToSend, body };
+                        node.warn({ streamName, streamKey, streamData, ...res });
+                    }
+
+                    if (res.status === 200) {
+                        if (node.fileCache.streamKeyExists(streamKey)) {
+                            await node.fileCache.deleteFile(streamKey);
+                        }
+                    } else {
+                        throw new Error(`Upload failed with status ${res.status}`);
+                    }
                 } catch (error) {
-                    await node.fileCache.appendData(pair.streamKey, pair.data);
+                    try {
+                        await node.fileCache.appendData(streamKey, pair.data);
+                    } catch (cacheWriteErr) {
+                        logError(`Failed to cache unsent data for stream ${streamKey}`, cacheWriteErr.message);
+                    }
                 }
             }
 
             try {
-                const promises = [];
                 for (let i = 0; i < enqueuedStreamBlocks.length; i += maxConcurrentRequests) {
                     const chunk = enqueuedStreamBlocks.slice(i, i + maxConcurrentRequests);
-                    const chunkPromises = chunk.map(pair => uploadBlock(pair));
-                    promises.push(...chunkPromises);
-                    await Promise.all(chunkPromises);
+                    await Promise.all(chunk.map(pair => uploadBlock(pair)));
                 }
-                await Promise.all(promises);
                 return true;
-
             } catch (error) {
                 logError("Error posting bulk data: ", error.message || error);
                 throw error;
