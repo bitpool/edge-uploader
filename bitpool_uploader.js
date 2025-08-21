@@ -389,15 +389,19 @@ module.exports = function (RED) {
                                 let streamName = msg.topic;
                                 let areStreamTagsPosted = false;
                                 node.pool.addStreamName(streamName);
+                                stream = node.pool.getStreamByNameOrKey(streamName);
 
                                 let streamKey = null;
                                 let utcSeconds = msg.utcSeconds !== undefined ? msg.utcSeconds : null;
                                 if (utcSeconds !== null) {
                                     let recordDate = new Date(utcSeconds * 1000);
-                                    streamKey, areStreamTagsPosted = node.pool.getStreamByNameOrKey(streamName).addData(msg.payload, recordDate);
+                                    stream.addData(msg.payload, recordDate);
                                 } else {
-                                    streamKey, areStreamTagsPosted = node.pool.getStreamByNameOrKey(streamName).addData(msg.payload);
+                                    stream.addData(msg.payload);
+
                                 }
+                                streamKey = stream.getStreamKey();
+                                areStreamTagsPosted = stream.getTagsPosted();
 
                                 if (!streamKey) {
                                     // Ensure that only one stream is created at a time, else you will ddos the api
