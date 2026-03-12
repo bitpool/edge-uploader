@@ -515,25 +515,24 @@ class FileStorageCache {
 
             writeStream = fs.createWriteStream(filePath, { flags: 'a' });
 
-            // Loop the bitpool data array
+            // Loop the bitpool data array: write type byte per record so read can decode without API
             dataArray.forEach(data => {
                 try {
                     if (data.Val !== null && data.Val !== undefined) {
-                        // Store timestamp and data as 64-bit floats (doubles)
-                        const buffer = Buffer.allocUnsafe(16);                  // 8 bytes for timestamp, 8 bytes for data
-                        buffer.writeDoubleBE(new Date(data.Ts).getTime(), 0);   // Write the timestamp (first 8 bytes) - input is ISO string
-                        buffer.writeDoubleBE(data.Val, 8);                      // Write the number (next 8 bytes)
-                        writeStream.write(buffer);                              // Write the buffer to the stream
+                        // Type byte (0=double) + timestamp + value (17 bytes)
+                        const buffer = Buffer.allocUnsafe(17);
+                        buffer.writeUInt8(0, 0);
+                        buffer.writeDoubleBE(new Date(data.Ts).getTime(), 1);
+                        buffer.writeDoubleBE(data.Val, 9);
+                        writeStream.write(buffer);
                     } else if (data.ValStr !== null && data.ValStr !== undefined) {
-                        // Store the timestamp and string (null-terminated)
-                        const stringBuffer = Buffer.from(data.ValStr, 'utf8');  // Convert the string to a buffer
-                        const nullTerminator = Buffer.from([0]);                // Null terminator (\0)
-                        const timestampBuffer = Buffer.allocUnsafe(8);          // 8 bytes for timestamp
+                        // Type byte (1=string) + timestamp + string + null terminator
+                        writeStream.write(Buffer.from([1]));
+                        const timestampBuffer = Buffer.allocUnsafe(8);
                         timestampBuffer.writeDoubleBE(new Date(data.Ts).getTime(), 0);
-
-                        // Concat and write the buffers (timestamp + string + null terminator)
-                        const totalBuffer = Buffer.concat([timestampBuffer, stringBuffer, nullTerminator]);
-                        writeStream.write(totalBuffer);
+                        writeStream.write(timestampBuffer);
+                        writeStream.write(Buffer.from(data.ValStr, 'utf8'));
+                        writeStream.write(Buffer.from([0])); // null terminator
                     }
                 } catch (e) { }
             });
@@ -562,33 +561,33 @@ class FileStorageCache {
 
                 while (offset < fileData.length) {
                     try {
-                        // Read the timestamp (always 8 bytes)
-                        let timestamp = fileData.readDoubleBE(offset);
+                        if (offset + 1 > fileData.length) break;
+                        const recordType = fileData.readUInt8(offset);
+                        offset += 1;
+                        // Timestamp (always 8 bytes after type byte)
+                        if (offset + 8 > fileData.length) break;
+                        const timestamp = fileData.readDoubleBE(offset);
+                        offset += 8;
                         let dataString = null;
                         let dataNumber = null;
-                        offset += 8;
-                        if (dataType === DataType.DOUBLE) {
-                            // Timestamp and data as 64-bit floats (doubles)
+                        if (recordType === 0) {
+                            if (offset + 8 > fileData.length) break;
                             dataNumber = fileData.readDoubleBE(offset);
                             offset += 8;
-                        } else if (dataType === DataType.STRING) {
-                            // Find the null terminator for the string
+                        } else if (recordType === 1) {
                             const nullIndex = fileData.indexOf(0, offset);
-                            if (nullIndex === -1) break; // No null terminator found, break the loop
-                            // Extract the string (everything from offset to nullIndex)
+                            if (nullIndex === -1) break;
                             dataString = fileData.subarray(offset, nullIndex).toString('utf8');
-                            offset = nullIndex + 1; // Move past the null terminator
+                            offset = nullIndex + 1;
                         } else {
                             continue;
                         }
-
                         dataEntries.push({
                             Ts: new Date(timestamp).toISOString(),
-                            Val: dataType === DataType.DOUBLE ? dataNumber : null,
-                            ValStr: dataType === DataType.STRING ? dataString : null,
+                            Val: recordType === 0 ? dataNumber : null,
+                            ValStr: recordType === 1 ? dataString : null,
                             Calculated: false
                         });
-
                     } catch (e) { }
                 }
 
