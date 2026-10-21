@@ -19,9 +19,15 @@
       uploadInterval_value: { value: "15", required: true },
       uploadInterval_options: { value: "Minutes", required: true },
       bpChkShowDateOnLabel: { value: true }, // Backward compatibility hide
-      bpChkShowDebugWarnings: { value: true },
+      bpChkShowDebugWarnings: { value: false },
       rebuildOnError: { value: true }, // Backward compatibility hide
       PoolTags: { value: "" },
+      // Added in 2.4.6. These defaults apply only to nodes added from the palette: Node-RED does not fill
+      // missing properties on load, import or paste, so nodes saved by 2.4.3 keep its behaviour (unticked).
+      healthStatus: { value: true },
+      raiseFailuresToCatch: { value: true },
+      memoryOnlyCache: { value: false },
+      regSettleSecs: { value: 120 },
     },
     inputs: 1,
     outputs: 1,
@@ -289,8 +295,40 @@
           id="node-label-bpChkShowDebugWarnings"
           for="node-input-bpChkShowDebugWarnings"
           style="text-align:left; vertical-align:middle; width: 100%; padding-left: 35px;"
-          >Show any info/warning/error messages to the debug tab</label
+          >Verbose debug output</label
         >
+      </div>
+      <div class="form-row" style="display: flex;">
+        <div class="form-check" style="width: 10%; display: grid; align-items: baseline;">
+          <input class="form-check-input" type="checkbox" value="" id="node-input-healthStatus" />
+        </div>
+        <label for="node-input-healthStatus" style="text-align:left; vertical-align:middle; width: 100%; padding-left: 35px;"
+          >Show problems in node status</label
+        >
+      </div>
+      <div class="form-row" style="display: flex;">
+        <div class="form-check" style="width: 10%; display: grid; align-items: baseline;">
+          <input class="form-check-input" type="checkbox" value="" id="node-input-raiseFailuresToCatch" />
+        </div>
+        <label for="node-input-raiseFailuresToCatch" style="text-align:left; vertical-align:middle; width: 100%; padding-left: 35px;"
+          >Send problems to Catch nodes</label
+        >
+      </div>
+
+      <div class="form-row">
+        <p><u>Cache:</u></p>
+      </div>
+      <div class="form-row" style="display: flex;">
+        <div class="form-check" style="width: 10%; display: grid; align-items: baseline;">
+          <input class="form-check-input" type="checkbox" value="" id="node-input-memoryOnlyCache" />
+        </div>
+        <label for="node-input-memoryOnlyCache" style="text-align:left; vertical-align:middle; width: 100%; padding-left: 35px;"
+          >If the cache folder can't be created, keep unsent data in memory instead of stopping</label
+        >
+      </div>
+      <div class="form-row" style="display: flex;">
+        <label for="node-input-regSettleSecs" style="width: 40%;">Registration settle (secs)</label>
+        <input type="number" id="node-input-regSettleSecs" placeholder="120" style="width: 80px;" />
       </div>
 
       <!-- Hide this for backward compatibility -->
@@ -429,17 +467,24 @@
   <ol class="node-ports">
     <ul>
       <li><strong>Upload On Expired Time:</strong> The maximum number of minutes that elapse from the last upload timer event before data is uploaded. The default is 15 minute.</li>
-      <li><strong>Network Timeout Secs:</strong> The number of seconds an HTTP request will wait for the server before timing out. The default is 10 seconds.</li>
+      <li><strong>Network Timeout Secs:</strong> The number of seconds an HTTP request will wait for the server before timing out. The default is 10 seconds; 30 is recommended for slow links. 0 means "up to the gateway's limit". Negative values are invalid.</li>
     </ul>
   </ol>
 
   <h3><strong>Options</strong></h3>
   <ol class="node-ports">
     <ul>
-      <li><strong>Monitoring:</strong> Toggles system outputs and logging in both status and debug sections</li>
+      <li><strong>Verbose debug output:</strong> Every upload, warning and error, in the debug tab. For troubleshooting; leave it off in production.</li>
+      <li><strong>Show problems in node status:</strong> A red ring if the cloud can't be reached, a yellow ring if uploads are failing. Unticked, the status shows only the counters.</li>
+      <li><strong>Send problems to Catch nodes:</strong> Problems are always logged, at most once a minute each. Tick this to also send them to Catch nodes, for example to raise an alert.</li>
+      <li><strong>If the cache folder can't be created, keep unsent data in memory:</strong> The cache lives in <code>bitpool-data</code> in Node-RED's working directory. When that folder can't be created the node stops with a red status, unless this is ticked.</li>
+      <li><strong>Registration settle:</strong> When registering a new stream times out, the cloud may still create it. The node waits this many seconds (default 120; longer if the timed-out attempt itself took long, up to 300 s unless set higher) before trying again, so no duplicate stream is created. The same wait applies before re-posting a new pool whose creation timed out.</li>
     </ul>
     <p>
   </ol>
+
+  <h3><strong>Recovery behaviour</strong></h3>
+  <p>If the cloud can't be reached when the node starts (for example the network comes up after Node-RED), setup is retried automatically with an increasing delay (5 s up to 5 min). Readings are buffered meanwhile and sent once setup succeeds, except readings without <code>msg.utcSeconds</code> that the device clock stamped before this version was released: those came from a wrong clock and are dropped. A limited number of uploads run in parallel (at most 4 per stream, more requests as long as they succeed). If uploads fall behind, a stream's waiting readings are combined into fewer requests. Unsent readings go to the disk cache when an upload fails, and are sent in front of the stream's next readings; a cache over 30 KB goes in chunks. If that fails, new readings go without the cache for a while, so a stream's cache doesn't hold up its live readings. No cache is deleted for its size or age. When the node closes (a deploy, a restart or stopping Node-RED), readings waiting for upload are saved to disk and the next start sends them; only readings of topics that have no stream yet are lost. Caching pauses while free disk space is below 500 MB or 10% of the disk.</p>
 
   <h3><strong>Action Commands</strong></h3>
     <ol class="node-ports">
@@ -450,17 +495,18 @@
       <li><strong>CREATE_POOL:</strong> Creates a new pool model based on the configuration pool name. Sends message to debug tab to acknowledge.</li>
       <li><strong>PURGE_DATA:</strong> Purges all record data stored on this node. Sends message to debug tab to acknowledge.</li>
       <li><strong>UPLOAD_DATA:</strong> Uploads all record data stored on this node. Sends message to debug tab to acknowledge.</li>
+      <li><strong>REPLAY_HELD:</strong> Sends the cache files set aside at start-up in <code>bitpool-data/hold</code> (files earlier versions deleted at start-up: over 30 KB or 30 days old) for the streams this node uploads to. Outputs which streams were restored.</li>
     </ul>
   </ol>
 
   <h3><strong>Node Status Messages</strong></h3>
   <ol class="node-ports">
     <ul>
-      <li><strong>In:</strong> The number of messages received at the Input.</li>
-      <li><strong>Out:</strong> The number of messages sent to the upload queue. This occurs when the timer event triggers an upload.</li>
+      <li><strong>In:</strong> The number of readings held in memory, waiting for the next upload. If it keeps growing, streams aren't getting registered (check the log).</li>
+      <li><strong>Out:</strong> The number of upload batches waiting to be sent.</li>
       <li><strong>Time:</strong> The count down until the next upload based on the current configuration.</li>
       <li><strong>Streams:</strong> The number of streams identified on this node. Note, this is not the count of streams in the pool. These will match once all streams are added successfully.</li>
-      <li><strong>Cache:</strong> The number of stream records currently cached, waiting to be uploaded after a failed upload attempt.</li>
+      <li><strong>Cached:</strong> The number of streams with readings cached on disk after a failed upload. If it keeps growing, uploads are failing (check the log).</li>
     </ul>
     <p>
   </ol>

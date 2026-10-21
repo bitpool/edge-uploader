@@ -35,6 +35,8 @@ or using NPM from the command line.
 $ npm install @bitpoolos/edge-uploader
 ```
 
+See `CHANGELOG.md` for what changed.
+
 ## Resources
 - [bitpool.com](https://www.bitpool.com/) - who are we.
 - [app.bitpool.com](https://app.bitpool.com/) - our platform.
