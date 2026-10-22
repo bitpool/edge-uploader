@@ -13,6 +13,29 @@
     label: function () {
       return this.name || "Bitpool-Api-Key";
     },
+    oneditprepare: function () {
+      // Offer (never force) the "Bitpool2 " prefix when only the key's GUID was pasted
+      var guid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      var check = function () {
+        var key = ($("#node-config-input-api_key").val() || "").trim();
+        $("#bitpool-key-hint").toggle(guid.test(key));
+      };
+      $("#node-config-input-api_key").on("input change", check);
+      $("#bitpool-key-add-prefix").on("click", function (e) {
+        e.preventDefault();
+        var key = ($("#node-config-input-api_key").val() || "").trim();
+        $("#node-config-input-api_key").val("Bitpool2 " + key);
+        check();
+      });
+      check();
+    },
+    oneditsave: function () {
+      // The endpoint is a host name (optionally host:port and a path prefix). Strip a scheme, leading and
+      // trailing slashes and a trailing /public/v2 or /public/v3. Runs only when saved by a person.
+      var endpoint = ($("#node-config-input-api_endpoint").val() || "").trim();
+      endpoint = endpoint.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/^\/+/, "").replace(/\/+$/, "").replace(/\/public\/v[23]$/i, "").replace(/\/+$/, "");
+      $("#node-config-input-api_endpoint").val(endpoint);
+    },
   });
 </script>
 
@@ -48,5 +71,10 @@
       id="node-config-input-api_key"
       placeholder="Enter Bitpool API Key"
     />
+  </div>
+  <div class="form-row" id="bitpool-key-hint" style="display: none;">
+    <label></label>
+    <span>The key should start with <code>Bitpool2 </code>.
+      <a href="#" id="bitpool-key-add-prefix">Add it</a></span>
   </div>
 </script>

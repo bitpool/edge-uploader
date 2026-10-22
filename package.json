@@ -1,6 +1,6 @@
 {
   "name": "@bitpoolos/edge-uploader",
-  "version": "2.4.3",
+  "version": "2.4.6",
   "description": "A module to push data to Bitpool.",
   "dependencies": {
     "async-mutex": "^0.5.0",
@@ -28,7 +28,7 @@
     "iot"
   ],
   "engines": {
-    "node": ">=12.0.0"
+    "node": ">=14.0.0"
   },
   "author": {
     "name": "bitpool-dev",
